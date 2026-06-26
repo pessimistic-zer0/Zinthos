@@ -1,9 +1,10 @@
 """F1 LLM fallback — provider-agnostic abstract-query → feature-filter extraction.
 
-Plug-and-play: the provider (Claude / Gemini / any OpenAI-compatible endpoint) is chosen by
-SONIC_LLM_PROVIDER and lazily imported, so the engine has NO hard dependency on any SDK. If
-nothing is configured (or the key/SDK is missing), the fallback is simply disabled and F1
-returns its rules result — never a crash.
+Plug-and-play: the provider (Groq / Claude / Gemini / any OpenAI-compatible endpoint) is
+chosen by SONIC_LLM_PROVIDER and lazily imported, so the engine has NO hard dependency on
+any SDK. The active provider is Groq (llama-3.3-70b-versatile via .env). If nothing is
+configured (or the key/SDK is missing), the fallback is simply disabled and F1 returns its
+rules result — never a crash.
 
 Security: the model only ever proposes (col, op, value) triples as JSON. They are parsed,
 whitelisted, and bound as parameters by filters.build_where — the model never emits SQL.
@@ -40,7 +41,13 @@ SYSTEM_PROMPT = (
     "      → integer 0-1000 (higher = more of that quality; valence = musical positivity)\n"
     "  tempo → BPM (e.g. 120)   loudness → dB, negative (e.g. -8)   release_year → e.g. 1995\n"
     'Allowed op: "<", ">", or "between" (value = [lo, hi]).\n'
-    "Give 2-4 filters that best capture the mood/vibe. Output JSON only."
+    "Give 2-4 filters that capture the mood/vibe. Prefer \"between\" ranges over hard\n"
+    "cutoffs so results aren't empty, and only include a feature you're confident about.\n"
+    'Example — query "melancholy late-night rainy day":\n'
+    '  {"filters": [{"col": "valence", "op": "between", "value": [100, 400]}, '
+    '{"col": "energy", "op": "between", "value": [100, 450]}, '
+    '{"col": "acousticness", "op": ">", "value": 500}]}\n'
+    "Output JSON only."
 )
 
 DEFAULT_MODELS = {
