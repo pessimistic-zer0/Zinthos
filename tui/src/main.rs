@@ -175,6 +175,9 @@ fn extract_library(root: &str) -> Vec<Value> {
 const VIOLET: Color = Color::Rgb(0x7C, 0x6B, 0xB0); // frame / border (mid-gradient)
 const CRIMSON: Color = Color::Rgb(0xB0, 0x1F, 0x32); // sparing hot accent
 const LAVENDER: Color = Color::Rgb(0xB6, 0xA6, 0xDC); // top of the gradient, wordmark
+const TITLE: Color = Color::Rgb(0xEC, 0xEC, 0xF4); // result-row titles: explicit near-white so
+                                                   // bold text renders crisply (no terminal-default
+                                                   // "bright bold" remap that dims under GIF capture)
 
 // ── banner gradient: lavender (top) → indigo (base), 4 stops, per line ─────────────
 fn grad(i: usize, n: usize) -> Color {
@@ -1016,7 +1019,7 @@ fn row_item(pos: Option<usize>, r: &Value) -> ListItem<'static> {
         spans.push(Span::styled(score, Style::default().fg(Color::Yellow)));
     }
     let pop = s(r, "popularity");
-    spans.push(Span::styled(s(r, "title"), Style::default().add_modifier(Modifier::BOLD)));
+    spans.push(Span::styled(s(r, "title"), Style::default().fg(TITLE).add_modifier(Modifier::BOLD)));
     spans.push(Span::raw("  "));
     spans.push(Span::styled(s(r, "artists"), Style::default().fg(Color::Gray)));
     spans.push(Span::styled(
@@ -1302,7 +1305,9 @@ fn library_screen(f: &mut Frame, app: &mut App) {
     let block = outer("Your Library");
     let inner = block.inner(f.area());
     f.render_widget(block, f.area());
-    ambient(f, inner, app.frame);
+    // No ambient sky on results-bearing screens: the animated starfield redraws every tick
+    // (defeating mouse text-selection) and its motes overlap the rows, dimming glyphs. The
+    // decorative landing screens (menu/scan/playlist) keep the sky; this one stays calm.
 
     let bd_height = (app.lib_genres.len().min(6) as u16 + 2).max(3);
     let rows = Layout::vertical([
@@ -1367,7 +1372,9 @@ fn library_screen(f: &mut Frame, app: &mut App) {
 }
 
 fn query_screen(f: &mut Frame, app: &mut App) {
-    ambient(f, f.area(), app.frame);
+    // No ambient sky here — see library_screen: results & the detail card (incl. the preview
+    // URL) must stay selectable and un-dimmed, so this screen doesn't animate a starfield
+    // behind the text. The menu/scan/playlist landing screens keep the sky.
 
     let rows = Layout::vertical([Constraint::Length(3), Constraint::Min(0), Constraint::Length(1)])
         .split(f.area());
