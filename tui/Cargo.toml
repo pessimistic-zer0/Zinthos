@@ -1,0 +1,21 @@
+[package]
+name = "sonic-tui"
+version = "0.1.0"
+edition = "2021"
+description = "Sonic Something — ratatui terminal client for the engine's JSON API"
+default-run = "sonic-tui"   # plain `cargo run` launches the TUI; the diagnose tool is --bin diagnose
+
+[[bin]]
+name = "sonic-tui"
+path = "src/main.rs"
+
+[dependencies]
+ratatui = "0.29"                                     # re-exports crossterm 0.28
+ureq = { version = "2", default-features = false, features = ["json"] }  # plain HTTP, no TLS
+serde_json = "1"
+lofty = "0.24"                                        # pure-Rust audio tag reader (no system libs)
+walkdir = "2"                                         # recursive directory walk for the library scan
+
+[profile.release]
+opt-level = 3
+lto = true
