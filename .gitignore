@@ -1,0 +1,48 @@
+# === Secrets ===
+.env
+*.env
+.envrc
+
+# === Environments / build dirs ===
+.venv/
+.direnv/
+venv/
+__pycache__/
+*.pyc
+target/
+_build_tmp/
+*.o
+*.out
+*.d
+database/build/master_db_builder
+.claude/settings.local.json
+
+# === Databases (too large to ship; 162 GB + 22 GB) ===
+*.db
+*.db-shm
+*.db-wal
+*.sqlite3
+
+# === Large ML artifacts (embeddings, indexes, trained models) ===
+*.f32
+*.faiss
+*.npy
+*.i64
+*.joblib
+model_training/genre_gbdt.txt
+
+# === Bulk data / generated reports ===
+*.csv
+library_report.json
+*.log
+*.run.log
+
+# === Claude Code context files (not for the public repo) ===
+CLAUDE.md
+
+# === Internal-only docs (not for the public repo) ===
+PRD_Version2.md
+
+# === Notebook cruft ===
+*.ipynb_checkpoints
+*.virtual_documents
