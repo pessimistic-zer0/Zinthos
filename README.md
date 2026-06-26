@@ -8,6 +8,18 @@ The whole pipeline — a 266 GB raw-data ETL, genre classification over 255M row
 
 ---
 
+## Demo
+
+Searching by feel — a vibe query (`dark moody instrumental electronic`) returns real tracks; `s` pulls nearest neighbours from the FAISS index ("more like this").
+
+![Zinthos TUI — search & similar tracks](docs/demo.gif)
+
+Building a mood playlist — describe a vibe (`energetic upbeat happy dance pop`) and get a smoothly transition-ordered set.
+
+![Zinthos TUI — mood playlist](docs/playlist.gif)
+
+> The terminal client talks to the FastAPI engine over JSON; results above are live from the 255M-track index.
+
 ## Architecture
 
 ```
@@ -45,6 +57,14 @@ The underlying data is third-party and is **never redistributed here**: the buil
 - **Vector search (FAISS):** `IndexIVFPQ`, `nlist=16000`, 10 sub-quantizers — nearest-neighbour similarity in <100 ms.
 
 See [`LLM_PRD.md`](LLM_PRD.md) for the full feature spec.
+
+### Results
+
+Evaluation artifacts from the genre classifier and the supervised autoencoder (full-resolution PNGs in [`model_training/`](model_training/)):
+
+| Genre GBDT — confusion | Genre GBDT — training curves | Feature importances | Autoencoder — loss curves |
+|---|---|---|---|
+| ![confusion matrix](model_training/genre_gbdt_confusion.png) | ![training curves](model_training/genre_gbdt_curves.png) | ![feature importances](model_training/genre_gbdt_importances.png) | ![autoencoder curves](model_training/sae_curves.png) |
 
 ## Running it
 

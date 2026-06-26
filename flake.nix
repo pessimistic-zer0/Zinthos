@@ -102,6 +102,10 @@
             # figlet: regenerate the Zinthos banner from the vendored
             # "Delta Corps Priest 1" font (tui/assets/). See tui/assets/regen-banner.sh.
             figlet
+
+            # vhs: render the README demo GIFs from the .tape scripts in
+            # tui/assets/. See tui/assets/CLAUDE.md for the recording runbook.
+            vhs
           ];
           RUST_BACKTRACE = "1";
         };
