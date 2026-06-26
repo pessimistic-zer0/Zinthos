@@ -18,6 +18,10 @@ Building a mood playlist — describe a vibe (`energetic upbeat happy dance pop`
 
 ![Zinthos TUI — mood playlist](docs/playlist.gif)
 
+Scanning a local library — point it at a folder of audio files; it reads their tags, identity-matches them against the catalog, maps your taste (genre + era breakdown), and recommends more.
+
+![Zinthos TUI — local library scan](docs/scan.gif)
+
 > The terminal client talks to the FastAPI engine over JSON; results above are live from the 255M-track index.
 
 ## Architecture
