@@ -731,11 +731,6 @@ impl App {
             self.start(Job::Search { q: self.last_query.clone(), offset: self.offset, append: true });
         }
     }
-    fn refresh(&mut self) {
-        if !self.last_query.is_empty() {
-            self.start(Job::Search { q: self.last_query.clone(), offset: 0, append: false });
-        }
-    }
     fn submit_search(&mut self) {
         let q = self.query.value.trim().to_string();
         if q.is_empty() {
@@ -815,7 +810,6 @@ impl App {
                         self.start(Job::Similar(id));
                     }
                 }
-                KeyCode::Char('r') => self.refresh(),
                 KeyCode::Enter => {
                     if let Some(id) = self.selected_id() {
                         self.detail_from = Mode::Results;
@@ -1418,8 +1412,8 @@ fn query_screen(f: &mut Frame, app: &mut App) {
 
     let help = match app.mode {
         Mode::Search => "←/→ edit · Ctrl-W del word · Enter search · ↓ results · Esc menu",
-        Mode::Results if app.vim => "j/k move · Enter open · s similar · r refresh · / edit · Esc query · q menu",
-        Mode::Results => "↑/↓ move · Enter open · s similar · r refresh · / edit · Esc query · q menu",
+        Mode::Results if app.vim => "j/k move · Enter open · s similar · / edit · Esc query · q menu",
+        Mode::Results => "↑/↓ move · Enter open · s similar · / edit · Esc query · q menu",
         Mode::Detail => "s similar · Esc back",
         _ => "",
     };
