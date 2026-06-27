@@ -1,4 +1,4 @@
-# Sonic Something / "Zinthos" — Complete Project Context
+# Zinthos — Complete Project Context
 
 > **What this document is and how to use it.**
 > This is a **self-contained context dump** of an entire personal project, written so it can be
@@ -18,7 +18,7 @@
 
 ## 0. TL;DR — the one-paragraph version
 
-Sonic Something is a music search/discovery engine over **~255 million Source A tracks** that lets
+Zinthos is a music search/discovery engine over **~255 million Source A tracks** that lets
 you find music by *how it sounds and feels* rather than just by name. The author took **~266 GB**
 of raw third-party SQLite/CSV dumps, built a single normalized **145 GB SQLite `master.db`** with a
 high-performance **C++** ETL pipeline, trained a **LightGBM** genre classifier and a **PyTorch

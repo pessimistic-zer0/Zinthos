@@ -1,5 +1,5 @@
 -- ════════════════════════════════════════════════════════════════════════════
--- Sonic Something — master.db schema (v2)
+-- Zinthos — master.db schema (v2)
 --
 -- KEY STRATEGY: integer surrogate keys. We REUSE the source SQLite `rowid`s as
 -- our primary keys (tracks.rowid, artists.rowid, albums.rowid). This is the

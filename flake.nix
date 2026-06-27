@@ -1,5 +1,5 @@
 {
-  description = "Sonic Something development environments";
+  description = "Zinthos development environments";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -25,7 +25,7 @@
     in {
       devShells.${system} = {
         default = pkgs.mkShell {
-          name = "sonic-something-default";
+          name = "zinthos-default";
 
           packages = with pkgs; [
             # C++ ETL toolchain
@@ -80,7 +80,7 @@
         };
 
         frontend = pkgs.mkShell {
-          name = "sonic-something-frontend";
+          name = "zinthos-frontend";
           packages = with pkgs; [
             nodejs_22
           ];
@@ -89,7 +89,7 @@
         # Rust shell for the ratatui TUI client (M6). Deps are pure-Rust (ratatui,
         # crossterm, ureq no-TLS, serde) so we only need the toolchain + a C compiler.
         tui = pkgs.mkShell {
-          name = "sonic-something-tui";
+          name = "zinthos-tui";
           packages = with pkgs; [
             rustc
             cargo

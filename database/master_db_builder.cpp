@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════════════════════
-//  Sonic Something — master.db ETL builder
+//  Zinthos — master.db ETL builder
 //
 //  Builds the normalized, integer-keyed master.db from:
 //    - source_a.sqlite3                (tracks/artists/albums/junctions)
@@ -755,7 +755,7 @@ int main(int argc, char** argv) {
         else die("unknown arg: " + a);
     }
 
-    std::printf("Sonic Something — master.db builder\n");
+    std::printf("Zinthos — master.db builder\n");
     std::printf("  source : %s\n  output : %s\n", cfg::SRC_DIR.c_str(), cfg::OUT_DB.c_str());
     if (dryRun) std::printf("  MODE   : DRY-RUN (source rows <= %lld)\n", (long long)dryRun);
 

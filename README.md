@@ -2,7 +2,7 @@
 
 > *Aeolian · Melodion · Zinthos*
 
-**Zinthos** (working name: *Sonic Something*) is a music search and discovery engine over **~255 million tracks** and **~400 million artist associations**. It lets you search for music by how it *sounds* and *feels* — combining rule-based audio-feature filtering, machine-learned genre prediction and learned embeddings, and an LLM fallback for natural-language queries.
+**Zinthos** is a music search and discovery engine over **~255 million tracks** and **~400 million artist associations**. It lets you search for music by how it *sounds* and *feels* — combining rule-based audio-feature filtering, machine-learned genre prediction and learned embeddings, and an LLM fallback for natural-language queries.
 
 The whole pipeline — a 266 GB raw-data ETL, genre classification over 255M rows, a supervised autoencoder, a FAISS vector index, a FastAPI engine, and a Rust terminal client — runs on a single 15 GB-RAM / 6 GB-VRAM machine.
 

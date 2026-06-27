@@ -1,7 +1,7 @@
-# Distilled PRD: Sonic Something (LLM-Optimized Version)
+# Distilled PRD: Zinthos (LLM-Optimized Version)
 
 ## 1. Project Overview & Tech Stack
-**Sonic Something** is a music search/discovery app allowing users to search by "sound and feel" across ~255M Source A tracks.
+**Zinthos** is a music search/discovery app allowing users to search by "sound and feel" across ~255M Source A tracks.
 *   **Environment**: NixOS. We are using a Nix devshell. Always read `flake.nix` to understand the available dependencies.
 *   **Data Pipeline/ETL**: C++, SQLite (Handles ~266GB source data: source_a.sqlite3 117GB, audio_features 39GB, source_b 110GB to build `master.db`)
 *   **ML Pipeline**: Python, LightGBM (Genre), PyTorch (Embeddings/Autoencoder), FAISS (Vector search)

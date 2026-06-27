@@ -1,1 +1,1 @@
-"""Sonic Something Engine — the headless FastAPI "Global Brain"."""
+"""Zinthos Engine — the headless FastAPI "Global Brain"."""

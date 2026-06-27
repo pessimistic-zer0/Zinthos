@@ -2,7 +2,7 @@
 name = "sonic-tui"
 version = "0.1.0"
 edition = "2021"
-description = "Sonic Something — ratatui terminal client for the engine's JSON API"
+description = "Zinthos — ratatui terminal client for the engine's JSON API"
 default-run = "sonic-tui"   # plain `cargo run` launches the TUI; the diagnose tool is --bin diagnose
 
 [[bin]]
