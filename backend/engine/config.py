@@ -48,6 +48,9 @@ class Config:
     nprobe: int = int(_env("SONIC_NPROBE", "64"))        # recall@10 plateaus at 64
     faiss_topk: int = 100                                 # candidates before re-rank
     default_k: int = 20                                   # results returned
+    # F1 reshuffle: a seeded "different songs" draw samples within the top-N most popular
+    # matches (index-fast pool) — bounds the work so a broad mood query doesn't full-scan/sort.
+    reshuffle_pool: int = int(_env("SONIC_RESHUFFLE_POOL", "600"))
 
     # ── sqlite tuning (per read-only connection) ────────────────────────────────
     # mmap is file-backed/reclaimable (won't swap). The page cache is HEAP (anonymous →

@@ -13,7 +13,7 @@ use std::collections::HashSet;
 use std::process::Child;
 use std::sync::mpsc::{channel, Receiver, TryRecvError};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::buffer::Buffer;
@@ -68,7 +68,7 @@ enum Mode {
 }
 
 enum Job {
-    Search { q: String, offset: usize, append: bool },
+    Search { q: String, offset: usize, append: bool, seed: u32 },
     Similar(i64),
     Detail(i64),
     Scan { path: String },
@@ -537,6 +537,7 @@ struct App {
     playlist: TextField,
     last_query: String,
     offset: usize, // next raw SQL offset for paging
+    seed: u32,     // 0 = strict popularity; >0 = a seeded reshuffle draw (no paging)
     pageable: bool,
     results: Vec<Value>,
     seen: HashSet<(String, String)>, // cross-page dedupe
@@ -572,6 +573,7 @@ impl App {
             playlist: TextField::default(),
             last_query: String::new(),
             offset: 0,
+            seed: 0,
             pageable: false,
             results: Vec::new(),
             seen: HashSet::new(),
@@ -727,8 +729,9 @@ impl App {
         }
     }
     fn load_more(&mut self) {
-        if self.pageable && !self.last_query.is_empty() && !self.busy() {
-            self.start(Job::Search { q: self.last_query.clone(), offset: self.offset, append: true });
+        // A seeded reshuffle is a one-shot sampled draw, not an offset-pageable list.
+        if self.pageable && self.seed == 0 && !self.last_query.is_empty() && !self.busy() {
+            self.start(Job::Search { q: self.last_query.clone(), offset: self.offset, append: true, seed: 0 });
         }
     }
     fn submit_search(&mut self) {
@@ -737,7 +740,21 @@ impl App {
             return;
         }
         self.last_query = q.clone();
-        self.start(Job::Search { q, offset: 0, append: false });
+        self.seed = 0; // a fresh query shows the best (most popular) matches first
+        self.start(Job::Search { q, offset: 0, append: false, seed: 0 });
+    }
+    /// "Different songs": re-run the current query with a fresh random seed, surfacing a new
+    /// slice of the matching pool (popularity-favoured but no longer popularity-locked).
+    fn reshuffle(&mut self) {
+        if self.last_query.is_empty() || self.busy() {
+            return;
+        }
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.subsec_nanos())
+            .unwrap_or(0);
+        self.seed = nanos.max(1); // never 0 — that's the deterministic path
+        self.start(Job::Search { q: self.last_query.clone(), offset: 0, append: false, seed: self.seed });
     }
 
     fn select_menu(&mut self) {
@@ -810,6 +827,7 @@ impl App {
                         self.start(Job::Similar(id));
                     }
                 }
+                KeyCode::Char('r') => self.reshuffle(),
                 KeyCode::Enter => {
                     if let Some(id) = self.selected_id() {
                         self.detail_from = Mode::Results;
@@ -940,9 +958,10 @@ fn fetch(agent: &ureq::Agent, base: &str, path: &str, params: &[(&str, &str)]) -
 
 fn run_job(agent: &ureq::Agent, base: &str, job: Job) -> Done {
     match job {
-        Job::Search { q, offset, append } => {
+        Job::Search { q, offset, append, seed } => {
             let off = offset.to_string();
-            match fetch(agent, base, "/search", &[("q", &q), ("limit", "50"), ("offset", &off)]) {
+            let sd = seed.to_string();
+            match fetch(agent, base, "/search", &[("q", &q), ("limit", "50"), ("offset", &off), ("seed", &sd)]) {
                 Ok(v) => Done::Results { items: results_of(&v), source: s(&v, "source"), append, pageable: true },
                 Err(e) => Done::Err(e),
             }
@@ -1412,8 +1431,8 @@ fn query_screen(f: &mut Frame, app: &mut App) {
 
     let help = match app.mode {
         Mode::Search => "←/→ edit · Ctrl-W del word · Enter search · ↓ results · Esc menu",
-        Mode::Results if app.vim => "j/k move · Enter open · s similar · / edit · Esc query · q menu",
-        Mode::Results => "↑/↓ move · Enter open · s similar · / edit · Esc query · q menu",
+        Mode::Results if app.vim => "j/k move · Enter open · s similar · r reshuffle · / edit · Esc query · q menu",
+        Mode::Results => "↑/↓ move · Enter open · s similar · r reshuffle · / edit · Esc query · q menu",
         Mode::Detail => "s similar · Esc back",
         _ => "",
     };

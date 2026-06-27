@@ -31,7 +31,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
 
 
-app = FastAPI(title="Sonic Something Engine", lifespan=lifespan)
+app = FastAPI(title="Zinthos Engine", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -72,8 +72,8 @@ async def track_detail(track_id: int) -> dict[str, object]:
 
 
 @app.get("/search", dependencies=[Depends(require_auth)])
-async def semantic_search(q: str, limit: int = 50, offset: int = 0) -> dict[str, object]:
-    return search.semantic_search(q, limit, offset)
+async def semantic_search(q: str, limit: int = 50, offset: int = 0, seed: int = 0) -> dict[str, object]:
+    return search.semantic_search(q, limit, offset, seed)
 
 
 class PlaylistRequest(BaseModel):
