@@ -1,31 +1,152 @@
 // ════════════════════════════════════════════════════════════════════════════
-//  Zinthos — master.db ETL builder
-//
-//  Builds the normalized, integer-keyed master.db from:
-//    - source_a.sqlite3                (tracks/artists/albums/junctions)
-//    - source_a_audio_features.sqlite3 (13 audio features)
-//    - source_b.csv                      (ground-truth genres by ISRC)
-//
-//  Authoritative design: ../database/implementation_plan_v2.md  +  ./schema.sql
-//
-//  GOVERNING PERFORMANCE RULE (the source FS is exfat/FUSE — random reads are
-//  ~35x slower than ext4): read source tables SEQUENTIALLY only; every
-//  random-access join targets a main.* table on /home (ext4). Never random-probe
-//  sp.*/af.*. See §0 of the plan.
-//
-//  Strategy: ATTACH both source DBs to the master connection and move bytes with
-//  INSERT…SELECT (IO-speed, ~0 heap). Only Phase 4 (artist_position counter) and
-//  Phase 5 (CSV parse) run as C++ prepared-statement loops.
-//
+//  ZINTHOS — master.db ETL builder
+
 //  Build:   see ./CMakeLists.txt   (or)
 //    g++ -O3 -std=c++17 master_db_builder.cpp -o master_db_builder \
 //        $(pkg-config --cflags --libs sqlite3)
 //
 //  Run:
-//    ./master_db_builder                 # full build, auto-resumes via _build_progress
-//    ./master_db_builder --dry-run 5000000   # smoke-test every phase on a 5M-row slice
-//    ./master_db_builder --reset         # drop all output tables + progress, start clean
-//    ./master_db_builder --validate      # just print row counts / sanity checks
+//    ./master_db_builder
+// ════════════════════════════════════════════════════════════════════════════
+//  SCHEMA PARSING — how schema.sql becomes the DDL struct
+//
+//  schema.sql (text file)
+//      │
+//      ▼ readFile()
+//  raw text string                        -- slurp entire file into memory as-is
+//      │
+//      ▼ stripLineComments()
+//  clean text                             -- remove "-- …" lines so embedded ";" in comments don't break splitting
+//      │
+//      ▼ split on ";"                     -- each chunk is one complete SQL statement
+//      │
+//      ▼ classify each chunk (identAfter) -- does it say CREATE TABLE or CREATE INDEX?
+//      │                                     extract the name that follows the keyword
+//      ▼
+//  DDL struct
+//      ├── tableOrder: ["albums","tracks",…]  ← file order preserved; deps (albums) come before children (tracks)
+//      ├── table{}:    name → CREATE TABLE …  ← full SQL, looked up by recreate()
+//      └── index{}:    name → CREATE INDEX …  ← full SQL, looked up by buildIndex()
+//                                │
+//               ┌────────────────┴──────────────────┐
+//               ▼                                   ▼
+//       createSchema()                     buildIndex("name")
+//    walks tableOrder in order             called explicitly at chosen moments —
+//    DROP + CREATE each table              2 built early (phases depend on them)
+//    → 10 empty tables exist               6 built late (after all data is loaded)
+//
+// ════════════════════════════════════════════════════════════════════════════
+//  BUILD PHASES — pipeline that fills master.db
+//
+//  Phase 0 — createSchema()
+//      │
+//      ▼ walk tableOrder in file order
+//      DROP TABLE IF EXISTS each table    -- so a retry always starts clean
+//      CREATE TABLE each table            -- 10 empty tables now exist in master.db
+//
+//  ─────────────────────────────────────────────────────────────────────────
+//  Phase 1 — phaseAlbums()
+//      │
+//      ▼ sequential scan of sp.album_images
+//      CREATE _album_cover (temp table)   -- picks largest cover art per album (MAX width*height) in one pass
+//      │
+//      ▼ INSERT INTO albums
+//      SELECT from sp.albums              -- LEFT JOIN _album_cover (on /home, not exfat)
+//      LEFT JOIN _album_cover             -- to attach the cover url to each album row
+//      │
+//      ▼ DROP _album_cover                -- temp table no longer needed
+//
+//  ─────────────────────────────────────────────────────────────────────────
+//  Phase 2 — phaseArtists()
+//      │
+//      ▼ INSERT INTO artists
+//      SELECT rowid, id, name, …          -- pure sequential copy, no joins
+//      from sp.artists
+//      │
+//      ▼ INSERT INTO artist_genres
+//      SELECT artist_rowid, genre         -- pure sequential copy, no joins
+//      from sp.artist_genres
+//
+//  ─────────────────────────────────────────────────────────────────────────
+//  Phase 3 — phaseTracks()  [groups 3a, 3b, early index, 3c]
+//
+//  Phase 3a — tracks
+//      │
+//      ▼ INSERT INTO tracks
+//      SELECT from sp.tracks              -- LEFT JOIN main.albums (on /home) to
+//      LEFT JOIN main.albums              -- denormalize release_date onto each track
+//
+//  Phase 3b — track_mappings
+//      │
+//      ▼ INSERT INTO track_mappings
+//      SELECT rowid, 'source_a', id       -- stores the original text id alongside
+//      from sp.tracks                     -- the new integer track_id (the Rosetta Stone)
+//
+//  Phase 3b → 3c bridge
+//      │
+//      ▼ buildIndex("idx_track_mappings_platform_id")
+//      built HERE not at the end          -- Phase 3c needs this index to do its remap lookup
+//
+//  Phase 3c — phaseAudioFeatures()
+//      │
+//      ▼ build in-RAM sorted array        -- 260M entries of {text_id, integer_track_id}
+//      SELECT from main.track_mappings    -- sequential scan on /home (fast)
+//      sort the array                     -- so binary search works
+//      │
+//      ▼ sequential scan of af.track_audio_features
+//      for each row:
+//          binary search array for text id  -- pure RAM lookup, zero disk I/O
+//          compute camelot_code             -- from key + mode columns
+//          INSERT INTO track_audio_features -- with remapped integer track_id
+//      │
+//      ▼ free the array                   -- releases ~7 GB of RAM
+//
+//  ─────────────────────────────────────────────────────────────────────────
+//  Phase 4 — phaseTrackArtists()
+//      │
+//      ▼ allocate position vector         -- one uint16 slot per track_id (~512 MB)
+//      │
+//      ▼ SELECT from sp.track_artists
+//      ORDER BY track_rowid, artist_rowid -- ordered so inserts append sequentially, no random writes
+//      │
+//      for each row:
+//          position = vector[track_id]    -- how many artists already seen for this track
+//          vector[track_id]++             -- increment for next artist on same track
+//          INSERT INTO track_artists      -- with track_id, artist_id, artist_position
+//
+//  ─────────────────────────────────────────────────────────────────────────
+//  Phase 5 bridge
+//      │
+//      ▼ buildIndex("idx_tracks_isrc")
+//      built HERE not at the end          -- Phase 5 does WHERE isrc=? per row; needs this index
+//
+//  Phase 5 — phaseSourceB()
+//      │
+//      ▼ open source_b.csv (110 GB)
+//      read header row                    -- find column positions for TrackISRC and AlbumGenreName
+//      │
+//      for each row:
+//          look up isrc in main.tracks    -- uses idx_tracks_isrc (on /home, fast)
+//          INSERT OR IGNORE into          -- first genre per track wins
+//          source_b_genres               -- one ISRC can map to multiple track_ids (1:N)
+//          │
+//          every 2M rows:
+//              save byte offset to db     -- so a crash can resume mid-CSV, not from byte 0
+//              COMMIT
+//
+//  ─────────────────────────────────────────────────────────────────────────
+//  Phase 7 — phaseFinalIndexes()
+//      │
+//      ▼ buildIndex × 6                   -- all remaining indexes built now that data is loaded
+//      idx_taf_track_id
+//      idx_track_artists_artist_id
+//      idx_source_b_genres_genre
+//      idx_ml_predictions_genre
+//      idx_ml_predictions_confidence
+//      idx_artists_name
+//      │
+//      ▼ ANALYZE                          -- gives SQLite query planner statistics for fast queries
+//
 // ════════════════════════════════════════════════════════════════════════════
 
 #include <sqlite3.h>
@@ -44,8 +165,6 @@
 #include <sys/stat.h>
 
 // ─────────────────────────────── Configuration ─────────────────────────────
-// Single place to edit if paths change. The source mount is exfat on internal
-// NVMe (/dev/nvme1n1p1); the master.db output lives on /home (ext4).
 namespace cfg {
 const std::string SRC_DIR      = "/run/media/zer0/7FE7-F0D8/Databases";
 const std::string SOURCE_A_DB  = SRC_DIR + "/source_a.sqlite3";
@@ -56,12 +175,12 @@ const std::string OUT_DB     = "/home/zer0/Desktop/sonic_something/master.db";
 const std::string SCHEMA_SQL = "/home/zer0/Desktop/sonic_something/database/schema.sql";
 const std::string TMP_DIR    = "/home/zer0/Desktop/sonic_something/_build_tmp"; // SQLITE_TMPDIR
 
-const int64_t COMMIT_EVERY   = 2'000'000;  // rows per transaction in C++ loops
-const int64_t LOG_EVERY      = 10'000'000; // progress log cadence in C++ loops
+const int64_t COMMIT_EVERY   = 2'000'000; 
+const int64_t LOG_EVERY      = 10'000'000; 
 }
 
 // ───────────────────────────────── Helpers ─────────────────────────────────
-using Clock = std::chrono::steady_clock;
+using Clock = std::chrono::steady_clock; // steady clock is monotonic and never jumps like unlike system_clock does in some circumstances
 
 static double secsSince(Clock::time_point t0) {
     return std::chrono::duration<double>(Clock::now() - t0).count();
@@ -98,13 +217,9 @@ static void logStep(const std::string& s) {
 }
 
 // ───────────────────────── Schema parsing (DDL) ────────────────────────────
-// We read schema.sql so it stays the single source of truth, but we control the
-// ORDER of index creation in code (two indexes must be built early — see plan).
 struct DDL {
-    // table name -> CREATE TABLE …   (file order preserved in `tableOrder`)
     std::unordered_map<std::string, std::string> table;
     std::vector<std::string> tableOrder;
-    // index name -> CREATE INDEX …
     std::unordered_map<std::string, std::string> index;
 };
 
@@ -119,8 +234,6 @@ static std::string readFile(const std::string& path) {
     return out;
 }
 
-// Extract the identifier following a keyword (e.g. "TABLE"/"INDEX"), stripping
-// backticks/quotes, stopping at whitespace or '('.
 static std::string identAfter(const std::string& chunk, const std::string& kw) {
     size_t p = chunk.find(kw);
     if (p == std::string::npos) return "";
@@ -136,16 +249,14 @@ static std::string identAfter(const std::string& chunk, const std::string& kw) {
     return name;
 }
 
-// Strip `-- …` line comments (SQLite ignores them anyway). Needed so a semicolon
-// inside a comment (e.g. "-- INTEGER in source; widened to REAL") doesn't split a
-// statement. Our schema.sql has no string literals containing "--", so this is safe.
+// Strip `-- …` line comments (SQLite ignores them anyway)
 static std::string stripLineComments(const std::string& in) {
     std::string out;
     out.reserve(in.size());
     size_t i = 0;
     while (i < in.size()) {
         if (in[i] == '-' && i + 1 < in.size() && in[i + 1] == '-') {
-            while (i < in.size() && in[i] != '\n') i++;   // skip to end of line
+            while (i < in.size() && in[i] != '\n') i++; 
         } else {
             out.push_back(in[i++]);
         }
@@ -163,7 +274,6 @@ static DDL parseSchema(const std::string& path) {
         std::string chunk = sql.substr(start, semi - start + 1);
         start = semi + 1;
 
-        // Detect kind by scanning non-comment content.
         bool isTable = chunk.find("CREATE TABLE") != std::string::npos;
         bool isIndex = chunk.find("CREATE INDEX") != std::string::npos ||
                        chunk.find("CREATE UNIQUE INDEX") != std::string::npos;
@@ -180,8 +290,6 @@ static DDL parseSchema(const std::string& path) {
 }
 
 // ──────────────────────── Build-progress harness ───────────────────────────
-// Crash-safe under journal_mode=OFF: a phase is only "done" once fully loaded.
-// On restart, an incomplete load step recreates its target table(s) before retry.
 struct Progress {
     sqlite3* db;
     void init() {
@@ -203,9 +311,8 @@ struct Builder {
     sqlite3* db;
     const DDL& ddl;
     Progress prog;
-    int64_t dryRun = 0;   // 0 = full build; else WHERE rowid <= dryRun on source scans
+    int64_t dryRun = 0;
 
-    // dry-run filter snippet for a given source rowid column
     std::string filt(const std::string& col) const {
         return dryRun ? (" WHERE " + col + " <= " + std::to_string(dryRun)) : std::string();
     }
@@ -230,7 +337,6 @@ struct Builder {
         std::printf("    built %s in %.1fs\n", name.c_str(), secsSince(t0));
     }
 
-    // run a single big INSERT…SELECT phase and report rows/time
     void runSql(const std::string& phase, const std::string& sql) {
         Clock::time_point t0 = Clock::now();
         execOrDie(db, "BEGIN;", "begin");
@@ -242,8 +348,6 @@ struct Builder {
 };
 
 // ───────────────────────────── Camelot (C++) ───────────────────────────────
-// key 0-11 (pitch class), mode 1=major→'xB' / 0=minor→'xA'; key=-1/out-of-range → "".
-// Verified: C-major(0,1)=8B, A-minor(9,0)=8A.
 static const char* camelot(int key, int mode) {
     static const char* MAJ[12] = {"8B","3B","10B","5B","12B","7B","2B","9B","4B","11B","6B","1B"};
     static const char* MIN[12] = {"5A","12A","7A","2A","9A","4A","11A","6A","1A","8A","3A","10A"};
@@ -251,7 +355,6 @@ static const char* camelot(int key, int mode) {
     return (mode == 1) ? MAJ[key] : MIN[key];
 }
 
-// Copy one column from a SELECT stmt to an INSERT stmt, preserving type/NULL.
 static void bindCol(sqlite3_stmt* ins, int ii, sqlite3_stmt* sel, int si) {
     switch (sqlite3_column_type(sel, si)) {
         case SQLITE_INTEGER: sqlite3_bind_int64(ins, ii, sqlite3_column_int64(sel, si)); break;
@@ -276,7 +379,6 @@ static void phaseAudioFeatures(Builder& b) {
     #pragma pack(pop)
     auto cmp = [](const Entry& a, const Entry& c){ return std::memcmp(a.id, c.id, 22) < 0; };
 
-    // 1. Build + sort the map from /home track_mappings (sequential scan).
     Clock::time_point t0 = Clock::now();
     std::vector<Entry> map;
     map.reserve(260'000'000);
@@ -286,7 +388,7 @@ static void phaseAudioFeatures(Builder& b) {
                                -1, &s, nullptr) != SQLITE_OK)
             die(std::string("prepare map: ") + sqlite3_errmsg(b.db));
         while (sqlite3_step(s) == SQLITE_ROW) {
-            Entry e{};                                   // zero-init → ids < 22 are zero-padded
+            Entry e{};                                   
             const char* pid = (const char*)sqlite3_column_text(s, 0);
             int len = sqlite3_column_bytes(s, 0);
             std::memcpy(e.id, pid, len > 22 ? 22 : len);
@@ -300,7 +402,6 @@ static void phaseAudioFeatures(Builder& b) {
     std::sort(map.begin(), map.end(), cmp);
     std::printf("    map sorted (%.1fs total)\n", secsSince(t0));
 
-    // 2. Stream af sequentially, RAM-lookup, append.
     std::string selSql =
         "SELECT track_id, danceability, energy, \"key\", loudness, mode, speechiness, "
         "acousticness, instrumentalness, liveness, valence, tempo, time_signature "
@@ -326,7 +427,7 @@ static void phaseAudioFeatures(Builder& b) {
         int len = sqlite3_column_bytes(sel, 0);
         std::memcpy(key.id, sid, len > 22 ? 22 : len);
         auto it = std::lower_bound(map.begin(), map.end(), key, cmp);
-        if (it == map.end() || std::memcmp(it->id, key.id, 22) != 0) continue;  // orphan af row
+        if (it == map.end() || std::memcmp(it->id, key.id, 22) != 0) continue;
         ++matched;
 
         int km = (sqlite3_column_type(sel, 3) == SQLITE_NULL) ? -1 : sqlite3_column_int(sel, 3);
@@ -355,7 +456,7 @@ static void phaseAudioFeatures(Builder& b) {
     std::printf("    audio_features: %lld matched / %lld scanned in %.1fs\n",
                 (long long)matched, (long long)n, secsSince(t1));
 
-    std::vector<Entry>().swap(map);                          // free ~7 GB
+    std::vector<Entry>().swap(map);
     execOrDie(b.db, "PRAGMA cache_size=-6000000;", "taf cache up");
     b.prog.mark("audio_features");
 }
@@ -370,8 +471,6 @@ static void phaseAlbums(Builder& b) {
     b.recreate("albums");
     execOrDie(b.db, "DROP TABLE IF EXISTS main._album_cover;", "drop cover");
 
-    // Largest cover per album in ONE sequential scan. SQLite returns the `url`
-    // belonging to the MAX(width*height) row (documented min/max bare-column rule).
     Clock::time_point t0 = Clock::now();
     execOrDie(b.db,
         "CREATE TABLE main._album_cover AS "
@@ -412,8 +511,8 @@ static void phaseArtists(Builder& b) {
 
 // Phase 3 — tracks (3a) → track_mappings (3b) → idx → audio features (3c)
 static void phaseTracks(Builder& b) {
-    // 3a + 3b + index + 3c are grouped, but each has its own progress marker so a
-    // crash resumes at the right sub-step without redoing 256M-row inserts.
+    // 3a + 3b + index + 3c are grouped, but each has its own progress marker
+    // so a crash resumes at the right sub-step without redoing 256M-row inserts.
 
     // 3a tracks
     if (!b.prog.done("tracks")) {
@@ -439,7 +538,6 @@ static void phaseTracks(Builder& b) {
         b.prog.mark("track_mappings");
     } else logStep("track_mappings [skip]");
 
-    // build-early index for the audio-features remap (must precede 3c)
     if (!b.prog.done("idx_track_mappings_platform_id")) {
         b.buildIndex("idx_track_mappings_platform_id");
         b.prog.mark("idx_track_mappings_platform_id");
@@ -462,9 +560,6 @@ static void phaseTrackArtists(Builder& b) {
                 (long long)(maxTrack + 1), (maxTrack + 1) * 2.0 / 1e6);
     std::vector<uint16_t> pos(maxTrack + 1, 0);
 
-    // ORDER BY the PK so inserts append sequentially into both the rowid and the
-    // (track_id, artist_id) PK index — avoids the random-write thrash that made the
-    // WITHOUT ROWID version of this table catastrophically slow at full scale.
     std::string sel = "SELECT track_rowid, artist_rowid FROM sp.track_artists" +
                       b.filt("track_rowid") + " ORDER BY track_rowid, artist_rowid;";
     sqlite3_stmt* rd = nullptr;
@@ -513,7 +608,7 @@ struct CsvReader {
     FILE* f = nullptr;
     std::vector<char> buf;
     size_t pos = 0, len = 0;
-    int64_t bytePos = 0;            // absolute bytes consumed (record boundary checkpoints)
+    int64_t bytePos = 0;
 
     explicit CsvReader(const std::string& path) : buf(1 << 20) {
         f = std::fopen(path.c_str(), "rb");
@@ -535,7 +630,6 @@ struct CsvReader {
         pos = len = 0;
         bytePos = off;
     }
-    // Parse one record into `fields`. Returns false at EOF (no more records).
     bool record(std::vector<std::string>& fields) {
         int c = get();
         if (c == EOF) return false;
@@ -567,7 +661,6 @@ static void phaseSourceB(Builder& b) {
     if (b.prog.done(P)) { logStep("source_b [skip]"); return; }
     logStep("Phase 5: source_b genres (raw AlbumGenreName by ISRC)");
 
-    // offset-resume bookkeeping (idempotent thanks to INSERT OR IGNORE)
     execOrDie(b.db, "CREATE TABLE IF NOT EXISTS _source_b_offset("
                     "id INTEGER PRIMARY KEY CHECK(id=0), byte_off INTEGER);", "dz off tbl");
     int64_t resume = scalarInt(b.db, "SELECT COALESCE((SELECT byte_off FROM _source_b_offset WHERE id=0),0);");
@@ -588,11 +681,11 @@ static void phaseSourceB(Builder& b) {
 
     if (resume > 0) { std::printf("    resuming at byte offset %lld\n", (long long)resume); csv.seekTo(resume); }
 
-    sqlite3_stmt* findTrack = nullptr;  // ISRC → integer track_id(s), 1:N, /home index
+    sqlite3_stmt* findTrack = nullptr; 
     if (sqlite3_prepare_v2(b.db, "SELECT track_id FROM main.tracks WHERE isrc = ?1;",
                            -1, &findTrack, nullptr) != SQLITE_OK)
         die(std::string("prepare findTrack: ") + sqlite3_errmsg(b.db));
-    sqlite3_stmt* insGenre = nullptr;   // first non-empty genre per track wins
+    sqlite3_stmt* insGenre = nullptr;
     if (sqlite3_prepare_v2(b.db,
             "INSERT OR IGNORE INTO main.source_b_genres(track_id, genre) VALUES(?1, ?2);",
             -1, &insGenre, nullptr) != SQLITE_OK)
@@ -645,7 +738,6 @@ static void phaseSourceB(Builder& b) {
 
 // Phase 6 — remaining indexes + finalize
 static void phaseIndexes(Builder& b) {
-    // idx_tracks_isrc must exist before Phase 5; build it here if Phase 5 hasn't run yet.
     if (!b.prog.done("idx_tracks_isrc")) {
         b.buildIndex("idx_tracks_isrc");
         b.prog.mark("idx_tracks_isrc");
@@ -656,7 +748,6 @@ static void phaseFinalIndexes(Builder& b) {
     const std::string P = "final_indexes";
     if (b.prog.done(P)) { logStep("final_indexes [skip]"); return; }
     logStep("Phase 7: remaining indexes + ANALYZE");
-    // Build-early indexes are already present; do NOT rebuild them here.
     for (const char* name : {"idx_taf_track_id", "idx_track_artists_artist_id",
                              "idx_source_b_genres_genre", "idx_ml_predictions_genre",
                              "idx_ml_predictions_confidence", "idx_artists_name"}) {
@@ -677,12 +768,12 @@ static void validate(sqlite3* db) {
     const Exp tables[] = {
         {"albums",               58'591'047},
         {"artists",              15'430'442},
-        {"artist_genres",         2'229'947},   // ≤ (OR IGNORE dedup)
+        {"artist_genres",         2'229'947},  
         {"tracks",              256'039'007},
         {"track_mappings",      256'039'007},
-        {"track_audio_features",255'597'711},   // ≤ (null_response filtered)
-        {"track_artists",       348'055'756},   // ≤ (OR IGNORE dedup)
-        {"source_b_genres",141'670'000},   // ~ (per PRD)
+        {"track_audio_features",255'597'711}, 
+        {"track_artists",       348'055'756}, 
+        {"source_b_genres",141'670'000},  
     };
     for (const auto& e : tables) {
         int64_t got = scalarInt(db, std::string("SELECT count(*) FROM ") + e.tbl + ";");
@@ -691,7 +782,6 @@ static void validate(sqlite3* db) {
     int64_t cam = scalarInt(db, "SELECT count(*) FROM track_audio_features WHERE camelot_code IS NOT NULL;");
     int64_t camNull = scalarInt(db, "SELECT count(*) FROM track_audio_features WHERE camelot_code IS NULL;");
     std::printf("    camelot_code: %lld set / %lld null\n", (long long)cam, (long long)camNull);
-    // spot check: orphan album_ids should be 0 if FKs are consistent
     int64_t orphanAlb = scalarInt(db,
         "SELECT count(*) FROM tracks t LEFT JOIN albums a ON a.album_id=t.album_id "
         "WHERE t.album_id IS NOT NULL AND a.album_id IS NULL;");
@@ -701,23 +791,17 @@ static void validate(sqlite3* db) {
 // ───────────────────────────── Connection ──────────────────────────────────
 static sqlite3* openMaster() {
     ::mkdir(cfg::TMP_DIR.c_str(), 0755);
-    setenv("SQLITE_TMPDIR", cfg::TMP_DIR.c_str(), 1);   // index sorts spill to /home, not RAM/exfat
+    setenv("SQLITE_TMPDIR", cfg::TMP_DIR.c_str(), 1); 
 
     sqlite3* db = nullptr;
     if (sqlite3_open(cfg::OUT_DB.c_str(), &db) != SQLITE_OK)
         die(std::string("open master: ") + sqlite3_errmsg(db));
 
-    // page_size must be set on an empty DB before any table exists (no-op afterwards).
     execOrDie(db, "PRAGMA page_size=32768;", "pragma page_size");
-    // CRASH SAFETY (learned the hard way: a power cut with journal_mode=OFF
-    // corrupted a 99%-built DB). A rollback journal + FULL sync makes finished
-    // phases power-loss durable. Cost is tiny here: every phase APPENDS to a fresh
-    // table (file grows → little to journal) and we commit only a few times per
-    // phase, so there are very few fsyncs.
     execOrDie(db, "PRAGMA journal_mode=DELETE;", "pragma journal");
     execOrDie(db, "PRAGMA synchronous=FULL;", "pragma sync");
     execOrDie(db, "PRAGMA temp_store=FILE;", "pragma temp_store");
-    execOrDie(db, "PRAGMA cache_size=-6000000;", "pragma cache");     // ~6 GB (more headroom for sorts / inserts; safe within 16 GB)
+    execOrDie(db, "PRAGMA cache_size=-6000000;", "pragma cache");     
     execOrDie(db, "PRAGMA mmap_size=30000000000;", "pragma mmap");
     execOrDie(db, "PRAGMA foreign_keys=OFF;", "pragma fk");
     execOrDie(db, "PRAGMA busy_timeout=60000;", "pragma busy");
@@ -779,16 +863,16 @@ int main(int argc, char** argv) {
     createSchema(b);
     phaseAlbums(b);
     phaseArtists(b);
-    phaseTracks(b);          // 3a/3b/idx/3c
+    phaseTracks(b); 
     phaseTrackArtists(b);
-    phaseIndexes(b);         // idx_tracks_isrc (before source_b)
+    phaseIndexes(b);        
     phaseSourceB(b);
     phaseFinalIndexes(b);    // remaining indexes + ANALYZE
 
     std::printf("\n=== BUILD COMPLETE in %.1f min ===\n", secsSince(all) / 60.0);
     validate(db);
 
-    // Rollback journal is auto-deleted on the final commit → clean single-file DB.
+    // Rollback journal is auto-deleted on the final commit
     sqlite3_close(db);
     std::printf("Run `sqlite3 %s 'PRAGMA integrity_check;'` for a final check.\n", cfg::OUT_DB.c_str());
     return 0;
