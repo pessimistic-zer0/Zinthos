@@ -147,26 +147,43 @@ fn extract_one(path: &std::path::Path) -> Option<Value> {
 
 fn extract_library(root: &str) -> Vec<Value> {
     use walkdir::WalkDir;
-    let mut out = Vec::new();
-    for entry in WalkDir::new(root).into_iter().filter_map(Result::ok) {
-        if out.len() >= SCAN_CAP {
-            break;
-        }
-        let p = entry.path();
-        if !entry.file_type().is_file() {
-            continue;
-        }
-        let is_audio = p
-            .extension()
-            .and_then(|e| e.to_str())
-            .map(|e| AUDIO_EXT.contains(&e.to_ascii_lowercase().as_str()))
-            .unwrap_or(false);
-        if is_audio {
-            if let Some(v) = extract_one(p) {
-                out.push(v);
-            }
-        }
+    // Pass 1: collect audio paths (cheap directory metadata only). SCAN_CAP is applied to
+    // the path list here, BEFORE dispatch, so the cap stays exact under parallelism.
+    let paths: Vec<std::path::PathBuf> = WalkDir::new(root)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|e| e.file_type().is_file())
+        .map(|e| e.into_path())
+        .filter(|p| {
+            p.extension()
+                .and_then(|e| e.to_str())
+                .map(|e| AUDIO_EXT.contains(&e.to_ascii_lowercase().as_str()))
+                .unwrap_or(false)
+        })
+        .take(SCAN_CAP)
+        .collect();
+    if paths.is_empty() {
+        return Vec::new();
     }
+    // Pass 2: read tags in parallel. Each read is independent, ~18 ms, and mostly disk
+    // wait — sequential reads took ~13 s for a 726-file library on a 12-core box. Contiguous
+    // chunks joined in spawn order keep the output in walk order, same as the old loop.
+    let workers = thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4)
+        .min(8)
+        .min(paths.len());
+    let chunk = (paths.len() + workers - 1) / workers;
+    let mut out = Vec::with_capacity(paths.len());
+    thread::scope(|s| {
+        let handles: Vec<_> = paths
+            .chunks(chunk)
+            .map(|c| s.spawn(move || c.iter().filter_map(|p| extract_one(p)).collect::<Vec<_>>()))
+            .collect();
+        for h in handles {
+            out.extend(h.join().unwrap_or_default());
+        }
+    });
     out
 }
 
