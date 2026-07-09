@@ -34,6 +34,9 @@ TUI (Rust)                                   Engine (Python / FastAPI)
   engine ever goes remote). Clients never open SQLite/FAISS — matching stays server-side.
 - TUI screen: `Mode::Library` (header counts + taste-breakdown bars + recommendations list
   that reuses the normal detail/similar navigation).
+- **Client-side tag reads are parallel** (since 2026-07-08): `extract_library` walks the
+  folder first, then reads tags on up to 8 threads. Sequential reads were ~18 ms/file
+  (mostly disk wait) → ~13 s for a 726-file library; parallel is ~4–6× faster on 12 cores.
 
 ## 3. What shipped (phases)
 
@@ -138,6 +141,12 @@ than fuzzy). Touch: `normalize_isrc` → return a list, `match()` ISRC phase →
 `recommend()` mean-pools ALL matched embeddings into one centroid; on a diverse library that
 lands in a muddy middle and FAISS returns obscure (pop-0) neighbours. **Fix:** k-means the
 matched embeddings into a few centroids, FAISS-search each, merge. Or weight by genre/recency.
+
+> **Perf note (fixed 2026-07-08):** `recommend()` used to hydrate **every** FAISS hit
+> (~790 for the real 726-file library — each a 4-table join on the 145 GB DB) and then keep
+> ≤100 after dedupe. It now uses `hydrate.hydrate_top()`: hydrate in ranked chunks of 150,
+> stop as soon as `size` unique records exist → ~100–300 joins per scan instead of ~790,
+> identical output. (This is a speed fix only; the centroid-quality issue above still stands.)
 
 ### 7c. Owned-duplicate exclusion  *(no rebuild)*
 Recs only exclude owned *track_ids*; a different-id catalog copy of a song you own can still

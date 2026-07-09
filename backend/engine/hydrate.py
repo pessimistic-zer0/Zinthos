@@ -38,15 +38,41 @@ def hydrate_one(track_id: int) -> dict[str, Any] | None:
     return out[0] if out else None
 
 
+def _dupe_key(r: dict[str, Any]) -> tuple[str, str]:
+    return (str(r.get("title", "")).strip().lower(),
+            str(r.get("artists", "")).strip().lower())
+
+
 def dedupe(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Drop catalog duplicates by (title, artists), keeping the first (highest-ranked)."""
     seen: set[tuple[str, str]] = set()
     out: list[dict[str, Any]] = []
     for r in records:
-        key = (str(r.get("title", "")).strip().lower(),
-               str(r.get("artists", "")).strip().lower())
+        key = _dupe_key(r)
         if key in seen:
             continue
         seen.add(key)
         out.append(r)
+    return out
+
+
+def hydrate_top(track_ids: list[int], size: int, chunk: int = 150) -> list[dict[str, Any]]:
+    """First `size` deduped display records from a ranked candidate list, hydrating lazily.
+
+    Dedupe needs the title/artist strings, so SOME over-hydration past `size` is inherent —
+    but candidates must be hydrated in ranked chunks with an early stop, not all at once:
+    the callers pass hundreds of FAISS hits (F7 recommend ≈ 800 for a real library) of
+    which only `size` survive, and each hydrated row costs a 4-table join on the 162 GB DB.
+    """
+    seen: set[tuple[str, str]] = set()
+    out: list[dict[str, Any]] = []
+    for i in range(0, len(track_ids), chunk):
+        for r in hydrate(track_ids[i:i + chunk]):
+            key = _dupe_key(r)
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(r)
+            if len(out) >= size:
+                return out
     return out

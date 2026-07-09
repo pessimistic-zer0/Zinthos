@@ -153,7 +153,10 @@ def recommend(index: VectorIndex, owned: list[int], size: int) -> list[dict[str,
     if not hits:
         return []
     score_by = {tid: s for tid, s in hits}
-    records = hydrate.dedupe(hydrate.hydrate([tid for tid, _ in hits]))[:size]
+    # hydrate_top stops as soon as `size` deduped records exist — for a real library the
+    # hit list is ~size*4 + owned (≈800 for 726 files), and hydrating all of it up front
+    # paid ~8× the needed 4-table joins.
+    records = hydrate.hydrate_top([tid for tid, _ in hits], size)
     for rec in records:
         rec["score"] = round((score_by[rec["track_id"]] + 1.0) / 2.0, 4)  # cosine → [0,1]
     return records

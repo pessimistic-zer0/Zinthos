@@ -62,6 +62,10 @@ class Config:
     # ── server ──────────────────────────────────────────────────────────────────
     host: str = _env("SONIC_HOST", "127.0.0.1")
     port: int = int(_env("SONIC_PORT", "3000"))
+    # Sync-handler threadpool size. Each worker thread opens its own read-only SQLite
+    # connection (~sqlite_cache_kb of heap), so anyio's default of 40 threads could pin
+    # ~2 GB against the ~9 GB swap-thrash ceiling; 8 × 48 MB ≈ 384 MB worst case.
+    worker_threads: int = int(_env("SONIC_THREADS", "8"))
     cors_origins: tuple[str, ...] = field(
         default_factory=lambda: tuple(
             o for o in _env("SONIC_CORS", "http://localhost:5173,http://127.0.0.1:5173").split(",") if o

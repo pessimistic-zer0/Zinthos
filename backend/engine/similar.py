@@ -64,10 +64,11 @@ def find_similar(index: VectorIndex, track_id: int, k: int) -> list[dict[str, An
         scored.append((W_SIM*sim + W_GENRE*genre + W_TEMPO*tempo + W_POP*pop + W_ERA*era, tid))
 
     scored.sort(reverse=True)
-    # Over-fetch then dedupe by (title, artists): the catalog has many copies of the same
-    # song, which are all genuine nearest neighbours but useless to show. Keep top-k after.
+    # The catalog has many copies of the same song — all genuine nearest neighbours but
+    # useless to show — so dedupe by (title, artists). hydrate_top hydrates in ranked
+    # chunks and stops at k unique records instead of paying the join for k*4 up front.
     score_by = {tid: s for s, tid in scored}
-    records = hydrate.dedupe(hydrate.hydrate([tid for _, tid in scored[: k * 4]]))[:k]
+    records = hydrate.hydrate_top([tid for _, tid in scored], k, chunk=max(2 * k, 40))
     for rec in records:
         rec["score"] = round(score_by[rec["track_id"]], 4)
     return records
