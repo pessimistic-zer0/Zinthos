@@ -49,6 +49,7 @@
             pyPkgs.fastapi
             pyPkgs.uvicorn
             pyPkgs.sqlalchemy
+            pyPkgs.faiss
 
             # Rust toolchain for the ratatui TUI client (M6)
             rustc
@@ -64,7 +65,17 @@
           LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath linuxLibs}:/run/opengl-driver/lib";
           
           shellHook = ''
-            export VENV_DIR=".venv"
+            # Anchor the venv to the flake/repo root by walking up from $PWD to
+            # the directory containing flake.nix. Previously VENV_DIR was ".venv"
+            # relative to $PWD, so invoking `nix develop` from a subdir (e.g.
+            # backend/) created a SEPARATE .venv there — the source of duplicate,
+            # diverging venvs. Pure-shell walk-up keeps this dependency-free.
+            FLAKE_ROOT="$PWD"
+            while [ "$FLAKE_ROOT" != "/" ] && [ ! -e "$FLAKE_ROOT/flake.nix" ]; do
+              FLAKE_ROOT="$(dirname "$FLAKE_ROOT")"
+            done
+            [ -e "$FLAKE_ROOT/flake.nix" ] || FLAKE_ROOT="$PWD"
+            export VENV_DIR="$FLAKE_ROOT/.venv"
 
             if [ ! -d "$VENV_DIR" ]; then
               echo "Creating $VENV_DIR with --system-site-packages..."
