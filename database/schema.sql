@@ -148,3 +148,8 @@ CREATE INDEX idx_ml_predictions_confidence ON ml_genre_predictions(confidence_sc
 
 -- Artist lookup by name (F3 GET /artist/{name}):
 CREATE INDEX idx_artists_name ON artists(name);
+
+-- Case-insensitive artist lookup (F3's fallback probe). Equality with COLLATE NOCASE
+-- cannot seek the BINARY index above — without this it full-scans 15.4M names (~0.5 s
+-- per miss, measured). Added 2026-07-08; ~331 MB. Seek time ~1 ms.
+CREATE INDEX idx_artists_name_nocase ON artists(name COLLATE NOCASE);

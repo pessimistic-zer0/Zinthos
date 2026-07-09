@@ -750,7 +750,8 @@ static void phaseFinalIndexes(Builder& b) {
     logStep("Phase 7: remaining indexes + ANALYZE");
     for (const char* name : {"idx_taf_track_id", "idx_track_artists_artist_id",
                              "idx_source_b_genres_genre", "idx_ml_predictions_genre",
-                             "idx_ml_predictions_confidence", "idx_artists_name"}) {
+                             "idx_ml_predictions_confidence", "idx_artists_name",
+                             "idx_artists_name_nocase"}) {
         b.buildIndex(name);
     }
     execOrDie(b.db, "PRAGMA analysis_limit=1000;", "analimit");

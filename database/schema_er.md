@@ -105,8 +105,10 @@ So `albums ||--o{ tracks` = one album has many tracks; `tracks ||--o| track_audi
 = a track has at most one feature row.
 
 **Indexes** (`"idx"` tagged above): `idx_tracks_isrc`, `idx_track_mappings_platform_id`,
-`idx_track_artists_artist_id`, `idx_artists_name`, `idx_source_b_genres_genre`,
-`idx_ml_predictions_genre`, `idx_ml_predictions_confidence`. Track-keyed satellites need
-no index — their `INTEGER PRIMARY KEY` *is* the rowid.
+`idx_track_artists_artist_id`, `idx_artists_name`, `idx_artists_name_nocase` (COLLATE
+NOCASE — the F3 case-insensitive fallback can't seek the BINARY name index; added
+2026-07-08), `idx_source_b_genres_genre`, `idx_ml_predictions_genre`,
+`idx_ml_predictions_confidence`. Track-keyed satellites need no index — their
+`INTEGER PRIMARY KEY` *is* the rowid.
 ```
 ```
