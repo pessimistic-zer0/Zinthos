@@ -46,7 +46,11 @@ class Config:
 
     # ── retrieval knobs ─────────────────────────────────────────────────────────
     nprobe: int = int(_env("SONIC_NPROBE", "64"))        # recall@10 plateaus at 64
-    faiss_topk: int = 100                                 # candidates before re-rank
+    # Over-fetch WIDE: a mega-hit (e.g. Shape of You — 902 catalog copies) fills the nearest
+    # neighbours entirely with its OWN copies, so a narrow pool dedupes down to ~1 result. A
+    # ~1500-wide pool lets genuinely-distinct neighbours survive past the copies; at 10-D FAISS
+    # search over this many is still single-digit ms. Env-overridable for tuning.
+    faiss_topk: int = int(_env("SONIC_FAISS_TOPK", "1500"))  # candidates before re-rank
     default_k: int = 20                                   # results returned
     # F1 reshuffle: a seeded "different songs" draw samples within the top-N most popular
     # matches (index-fast pool) — bounds the work so a broad mood query doesn't full-scan/sort.

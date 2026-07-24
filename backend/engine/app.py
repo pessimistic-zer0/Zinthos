@@ -23,7 +23,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from starlette.requests import Request
 
-from . import artist, hydrate, library, playlist, search, similar
+from . import artist, hydrate, library, playlist, resolve, search, similar
 from .config import CONFIG
 from .index import VectorIndex
 
@@ -132,6 +132,16 @@ def artist_detail(name: str) -> dict[str, object]:
     if rec is None:
         raise HTTPException(status_code=404, detail=f"artist {name!r} not found")
     return rec
+
+
+@app.get("/search/by-name", dependencies=[Depends(require_auth)])
+def search_by_name(title: str, artist: str = "", limit: int = 10) -> dict[str, object]:
+    """Resolve a typed song name → catalog candidates (pick-list). No FAISS: pure SQLite.
+
+    Step 1 of the "similar by name" flow; the client feeds a chosen candidate's track_id to
+    /search/similar/{track_id}. Plain `def` (threadpool) like every data route — see app docstring.
+    """
+    return resolve.resolve_by_name(title, artist, max(1, min(limit, 50)))
 
 
 @app.get("/search/similar/{track_id}", dependencies=[Depends(require_auth)])

@@ -6,8 +6,9 @@
 //! NO FAISS/SQLite — all heavy lifting stays in the engine. HTTP runs on a background thread
 //! so the UI never freezes; a spinner animates while a request is in flight.
 //!
-//! Screens: Menu → { Query (search), Scan (local library) } → Detail. Esc walks back up;
-//! from the menu Esc/q quits, Ctrl-C quits from anywhere.
+//! Screens: Menu → one of { Search, Scan (local library), Playlist, ByName } → Results/Detail.
+//! ByName (title+artist) → Candidates pick-list → `s`/Enter → Similar results — the by-name
+//! front door onto F6. Esc walks back up; from the menu Esc/q quits, Ctrl-C quits from anywhere.
 
 use std::collections::HashSet;
 use std::process::Child;
@@ -50,10 +51,11 @@ const DESC: [&str; 3] = [
 ];
 
 // (glyph, name, subtitle) — rendered as tiles, or as a stacked list on narrow terminals.
-const TILES: [(&str, &str, &str); 3] = [
+const TILES: [(&str, &str, &str); 4] = [
     ("⌕", "Search", "find songs by how they sound & feel"),
     ("≡", "Scan Library", "map your taste & get recommendations"),
     ("♫", "Mood Playlist", "a smoothly-sequenced set from a vibe"),
+    ("≈", "Similar Song", "name a track & find ones like it"),
 ];
 
 #[derive(PartialEq, Clone, Copy)]
@@ -65,6 +67,8 @@ enum Mode {
     Scan,
     Library,
     Playlist,
+    ByName,     // similar-by-name: a two-field (title, artist) input form
+    Candidates, // the by-name pick-list — choose which track to find similars for
 }
 
 enum Job {
@@ -73,12 +77,14 @@ enum Job {
     Detail(i64),
     Scan { path: String },
     Playlist { q: String },
+    ByName { title: String, artist: String },
 }
 
 enum Done {
     Results { items: Vec<Value>, source: String, append: bool, pageable: bool },
     Detail(Value),
     Library(Value),
+    Candidates(Vec<Value>), // by-name matches → the pick-list
     Err(String),
 }
 
@@ -101,6 +107,10 @@ fn results_of(v: &Value) -> Vec<Value> {
 
 fn tracks_of(v: &Value) -> Vec<Value> {
     v.get("tracks").and_then(Value::as_array).cloned().unwrap_or_default()
+}
+
+fn candidates_of(v: &Value) -> Vec<Value> {
+    v.get("candidates").and_then(Value::as_array).cloned().unwrap_or_default()
 }
 
 fn u(v: &Value, k: &str) -> usize {
@@ -552,6 +562,9 @@ struct App {
     query: TextField,
     scan: TextField,
     playlist: TextField,
+    byname_title: TextField,
+    byname_artist: TextField,
+    byname_focus: usize, // 0 = title field, 1 = artist field
     last_query: String,
     offset: usize, // next raw SQL offset for paging
     seed: u32,     // 0 = strict popularity; >0 = a seeded reshuffle draw (no paging)
@@ -588,6 +601,9 @@ impl App {
             query: TextField::default(),
             scan: TextField::default(),
             playlist: TextField::default(),
+            byname_title: TextField::default(),
+            byname_artist: TextField::default(),
+            byname_focus: 0,
             last_query: String::new(),
             offset: 0,
             seed: 0,
@@ -724,6 +740,22 @@ impl App {
                     self.lib_matched, self.lib_total, self.results.len()
                 );
             }
+            Done::Candidates(items) => {
+                // by-name pick-list. Server already dedupes, but reuse the cross-item dedupe
+                // for consistency, then land on the Candidates screen with row 0 selected.
+                self.source = "by-name".into();
+                self.pageable = false;
+                self.seen.clear();
+                self.results.clear();
+                for it in items {
+                    if self.seen.insert(dedupe_key(&it)) {
+                        self.results.push(it);
+                    }
+                }
+                self.list.select(if self.results.is_empty() { None } else { Some(0) });
+                self.mode = Mode::Candidates;
+                self.status = format!("{} match(es) · pick one, then s for similar", self.results.len());
+            }
             Done::Err(e) => self.status = format!("error: {e}"),
         }
     }
@@ -774,6 +806,18 @@ impl App {
         self.start(Job::Search { q: self.last_query.clone(), offset: 0, append: false, seed: self.seed });
     }
 
+    /// Similar-by-name step 1: resolve a typed (title, artist) to catalog candidates. The
+    /// engine requires the artist (Option-1); an empty title we reject locally.
+    fn submit_byname(&mut self) {
+        let title = self.byname_title.value.trim().to_string();
+        let artist = self.byname_artist.value.trim().to_string();
+        if title.is_empty() {
+            self.status = "enter a song title".into();
+            return;
+        }
+        self.start(Job::ByName { title, artist });
+    }
+
     fn select_menu(&mut self) {
         match self.menu_sel {
             0 => self.mode = Mode::Search,
@@ -784,6 +828,11 @@ impl App {
             2 => {
                 self.mode = Mode::Playlist;
                 self.status = "describe a mood — a smooth, transition-ordered playlist".into();
+            }
+            3 => {
+                self.mode = Mode::ByName;
+                self.byname_focus = 0;
+                self.status = "name a song — get others like it".into();
             }
             _ => {}
         }
@@ -818,6 +867,10 @@ impl App {
                 }
                 KeyCode::Char('3') => {
                     self.menu_sel = 2;
+                    self.select_menu();
+                }
+                KeyCode::Char('4') => {
+                    self.menu_sel = 3;
                     self.select_menu();
                 }
                 KeyCode::Enter => self.select_menu(),
@@ -911,6 +964,35 @@ impl App {
                 _ => {
                     self.playlist.handle(code, ctrl);
                 }
+            },
+            Mode::ByName => match code {
+                KeyCode::Esc => self.mode = Mode::Menu,
+                KeyCode::Tab | KeyCode::BackTab => self.byname_focus ^= 1,
+                KeyCode::Up => self.byname_focus = 0,
+                KeyCode::Down => self.byname_focus = 1,
+                KeyCode::Enter => self.submit_byname(),
+                _ => {
+                    if self.byname_focus == 0 {
+                        self.byname_title.handle(code, ctrl);
+                    } else {
+                        self.byname_artist.handle(code, ctrl);
+                    }
+                }
+            },
+            Mode::Candidates => match code {
+                KeyCode::Esc => self.mode = Mode::ByName, // back to edit the name
+                KeyCode::Char('q') => self.mode = Mode::Menu,
+                KeyCode::Up => self.move_sel(-1),
+                KeyCode::Down => self.move_sel(1),
+                KeyCode::Char('k') if self.vim => self.move_sel(-1),
+                KeyCode::Char('j') if self.vim => self.move_sel(1),
+                // the whole point of this screen: pick a track → songs like it.
+                KeyCode::Enter | KeyCode::Char('s') => {
+                    if let Some(id) = self.selected_id() {
+                        self.start(Job::Similar(id));
+                    }
+                }
+                _ => {}
             },
         }
         false
@@ -1016,6 +1098,27 @@ fn run_job(agent: &ureq::Agent, base: &str, job: Job) -> Done {
                 Err(e) => Done::Err(e.to_string()),
             }
         }
+        Job::ByName { title, artist } => {
+            match fetch(agent, base, "/search/by-name",
+                        &[("title", &title), ("artist", &artist), ("limit", "25")]) {
+                Ok(v) => {
+                    let items = candidates_of(&v);
+                    if items.is_empty() {
+                        // An empty list is a normal outcome, not a fetch error — turn it into a
+                        // helpful hint and stay on the input screen (Done::Err doesn't change mode).
+                        let msg = if v.get("need_artist").and_then(Value::as_bool).unwrap_or(false) {
+                            "add the artist too, to pin the song".to_string()
+                        } else {
+                            format!("no catalog match for “{title}” — check the spelling")
+                        };
+                        Done::Err(msg)
+                    } else {
+                        Done::Candidates(items)
+                    }
+                }
+                Err(e) => Done::Err(e),
+            }
+        }
     }
 }
 
@@ -1026,6 +1129,8 @@ fn ui(f: &mut Frame, app: &mut App) {
         Mode::Scan => scan_screen(f, app),
         Mode::Library => library_screen(f, app),
         Mode::Playlist => playlist_screen(f, app),
+        Mode::ByName => byname_screen(f, app),
+        Mode::Candidates => candidates_screen(f, app),
         _ => query_screen(f, app),
     }
 }
@@ -1119,15 +1224,15 @@ fn menu_screen(f: &mut Frame, app: &App) {
     f.render_widget(Paragraph::new(desc).alignment(Alignment::Center), rows[4]);
     f.render_widget(Paragraph::new(divider(rows[5].width, "⟡")), rows[5]);
 
-    // tiles need ~3×22 cols; below that, fall back to a stacked list so nothing wraps.
-    if rows[6].width >= 66 {
+    // tiles need ~22 cols each; below that, fall back to a stacked list so nothing wraps.
+    if rows[6].width >= 22 * TILES.len() as u16 {
         menu_tiles(f, rows[6], app);
     } else {
         menu_list(f, rows[6], app);
     }
 
     f.render_widget(
-        footer(app, "←/→ move · 1/2/3 or Enter select · q quit"),
+        footer(app, "←/→ move · 1-4 or Enter select · q quit"),
         rows[7],
     );
 }
@@ -1189,12 +1294,8 @@ fn menu_tiles(f: &mut Frame, area: Rect, app: &App) {
     ])
     .split(area);
 
-    let cols = Layout::horizontal([
-        Constraint::Ratio(1, 3),
-        Constraint::Ratio(1, 3),
-        Constraint::Ratio(1, 3),
-    ])
-    .split(vt[0]);
+    let n = TILES.len() as u32;
+    let cols = Layout::horizontal(vec![Constraint::Ratio(1, n); n as usize]).split(vt[0]);
 
     for (i, (glyph, name, _sub)) in TILES.iter().enumerate() {
         let on = i == app.menu_sel;
@@ -1329,6 +1430,78 @@ fn playlist_screen(f: &mut Frame, app: &App) {
         rows[4],
     );
     f.render_widget(footer(app, "Enter build · Esc back"), rows[5]);
+}
+
+/// Similar-by-name, step 1: a two-field form (title + artist). Tab/↑/↓ move focus; only the
+/// focused box shows the caret. Enter resolves the name to catalog candidates.
+fn byname_screen(f: &mut Frame, app: &App) {
+    let block = outer("Similar to a Song");
+    let inner = block.inner(f.area());
+    f.render_widget(block, f.area());
+    ambient(f, inner, app.frame);
+
+    let rows = Layout::vertical([
+        Constraint::Length(1), // pad
+        Constraint::Length(8), // banner
+        Constraint::Length(1), // pad
+        Constraint::Length(3), // title input
+        Constraint::Length(3), // artist input
+        Constraint::Min(0),    // hint
+        Constraint::Length(1), // footer
+    ])
+    .split(inner);
+
+    f.render_widget(Paragraph::new(banner_lines(app.frame)).alignment(Alignment::Center), rows[1]);
+    input_box(f, rows[3], "Song Title", &app.byname_title, app.byname_focus == 0);
+    input_box(f, rows[4], "Artist", &app.byname_artist, app.byname_focus == 1);
+    f.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            "Name a song you love (title + artist) — Zinthos finds that track, then recommends others that sound like it.",
+            Style::default().fg(Color::DarkGray),
+        )))
+        .alignment(Alignment::Center)
+        .wrap(Wrap { trim: true }),
+        rows[5],
+    );
+    f.render_widget(footer(app, "Tab switch field · Enter find · Esc back"), rows[6]);
+}
+
+/// Similar-by-name, step 2: the pick-list. Choosing a row (Enter/s) fires Job::Similar — the
+/// same path the results/library screens use — so the last hop is already-proven code.
+fn candidates_screen(f: &mut Frame, app: &mut App) {
+    let block = outer("Pick a Track");
+    let inner = block.inner(f.area());
+    f.render_widget(block, f.area());
+
+    let rows = Layout::vertical([
+        Constraint::Length(2), // header
+        Constraint::Min(0),    // candidates
+        Constraint::Length(1), // footer
+    ])
+    .split(inner);
+
+    let header = Line::from(vec![
+        Span::styled("Which one? ", Style::default().fg(LAVENDER).bold()),
+        Span::styled(
+            "pick the track you mean, then get songs like it",
+            Style::default().fg(Color::DarkGray).italic(),
+        ),
+    ]);
+    f.render_widget(Paragraph::new(header), rows[0]);
+
+    let items: Vec<ListItem> = app.results.iter().map(rec_item).collect();
+    let list = List::new(items)
+        .block(outer(format!("Matches ({})", app.results.len())))
+        .highlight_style(Style::default().bg(Color::Blue).add_modifier(Modifier::BOLD))
+        .highlight_symbol("▶ ");
+    f.render_stateful_widget(list, rows[1], &mut app.list);
+
+    let help = if app.vim {
+        "j/k move · Enter/s find similar · Esc edit name · q menu"
+    } else {
+        "↑/↓ move · Enter/s find similar · Esc edit name · q menu"
+    };
+    f.render_widget(footer(app, help), rows[2]);
 }
 
 fn library_screen(f: &mut Frame, app: &mut App) {

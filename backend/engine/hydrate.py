@@ -38,7 +38,7 @@ def hydrate_one(track_id: int) -> dict[str, Any] | None:
     return out[0] if out else None
 
 
-def _dupe_key(r: dict[str, Any]) -> tuple[str, str]:
+def dupe_key(r: dict[str, Any]) -> tuple[str, str]:
     return (str(r.get("title", "")).strip().lower(),
             str(r.get("artists", "")).strip().lower())
 
@@ -48,7 +48,7 @@ def dedupe(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     seen: set[tuple[str, str]] = set()
     out: list[dict[str, Any]] = []
     for r in records:
-        key = _dupe_key(r)
+        key = dupe_key(r)
         if key in seen:
             continue
         seen.add(key)
@@ -56,19 +56,23 @@ def dedupe(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return out
 
 
-def hydrate_top(track_ids: list[int], size: int, chunk: int = 150) -> list[dict[str, Any]]:
+def hydrate_top(track_ids: list[int], size: int, chunk: int = 150,
+                exclude: set[tuple[str, str]] | None = None) -> list[dict[str, Any]]:
     """First `size` deduped display records from a ranked candidate list, hydrating lazily.
 
     Dedupe needs the title/artist strings, so SOME over-hydration past `size` is inherent —
     but candidates must be hydrated in ranked chunks with an early stop, not all at once:
     the callers pass hundreds of FAISS hits (F7 recommend ≈ 800 for a real library) of
     which only `size` survive, and each hydrated row costs a 4-table join on the 162 GB DB.
+
+    `exclude` pre-seeds the dedupe with (title, artists) keys to suppress — F6 passes the
+    seed track's own key so copies of the seed don't come back as "similar".
     """
-    seen: set[tuple[str, str]] = set()
+    seen: set[tuple[str, str]] = set(exclude) if exclude else set()
     out: list[dict[str, Any]] = []
     for i in range(0, len(track_ids), chunk):
         for r in hydrate(track_ids[i:i + chunk]):
-            key = _dupe_key(r)
+            key = dupe_key(r)
             if key in seen:
                 continue
             seen.add(key)
