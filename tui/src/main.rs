@@ -51,11 +51,14 @@ const DESC: [&str; 3] = [
 ];
 
 // (glyph, name, subtitle) — rendered as tiles, or as a stacked list on narrow terminals.
+/// Menu cards are laid out as a grid this many columns wide (2×2 for the four options).
+const MENU_COLS: usize = 2;
+
 const TILES: [(&str, &str, &str); 4] = [
-    ("⌕", "Search", "find songs by how they sound & feel"),
-    ("≡", "Scan Library", "map your taste & get recommendations"),
-    ("♫", "Mood Playlist", "a smoothly-sequenced set from a vibe"),
-    ("≈", "Similar Song", "name a track & find ones like it"),
+    ("⌕", "Search by Description", "find songs by how they sound & feel"),
+    ("≡", "Scan My Library", "map your taste & get recommendations"),
+    ("♫", "Build a Mood Playlist", "a smoothly-sequenced set from a vibe"),
+    ("≈", "Find Similar Songs", "name a track & find ones like it"),
 ];
 
 #[derive(PartialEq, Clone, Copy)]
@@ -818,6 +821,13 @@ impl App {
         self.start(Job::ByName { title, artist });
     }
 
+    /// Step the menu cursor by `d` cards, clamped to the grid. A vertical move (`d` = ±cols)
+    /// on the short last row would fall off the end, so it lands on the final card instead.
+    fn menu_move(&mut self, d: isize) {
+        let last = TILES.len() as isize - 1;
+        self.menu_sel = (self.menu_sel as isize + d).clamp(0, last) as usize;
+    }
+
     fn select_menu(&mut self) {
         match self.menu_sel {
             0 => self.mode = Mode::Search,
@@ -847,16 +857,15 @@ impl App {
         match self.mode {
             Mode::Menu => match code {
                 KeyCode::Esc | KeyCode::Char('q') => return true,
-                KeyCode::Left | KeyCode::Up => self.menu_sel = self.menu_sel.saturating_sub(1),
-                KeyCode::Right | KeyCode::Down => {
-                    self.menu_sel = (self.menu_sel + 1).min(TILES.len() - 1)
-                }
-                KeyCode::Char('h') | KeyCode::Char('k') if self.vim => {
-                    self.menu_sel = self.menu_sel.saturating_sub(1)
-                }
-                KeyCode::Char('l') | KeyCode::Char('j') if self.vim => {
-                    self.menu_sel = (self.menu_sel + 1).min(TILES.len() - 1)
-                }
+                // the tiles are a MENU_COLS-wide grid: ←/→ step one card, ↑/↓ jump a row.
+                KeyCode::Left => self.menu_move(-1),
+                KeyCode::Right => self.menu_move(1),
+                KeyCode::Up => self.menu_move(-(MENU_COLS as isize)),
+                KeyCode::Down => self.menu_move(MENU_COLS as isize),
+                KeyCode::Char('h') if self.vim => self.menu_move(-1),
+                KeyCode::Char('l') if self.vim => self.menu_move(1),
+                KeyCode::Char('k') if self.vim => self.menu_move(-(MENU_COLS as isize)),
+                KeyCode::Char('j') if self.vim => self.menu_move(MENU_COLS as isize),
                 KeyCode::Char('1') => {
                     self.menu_sel = 0;
                     self.select_menu();
@@ -1224,15 +1233,17 @@ fn menu_screen(f: &mut Frame, app: &App) {
     f.render_widget(Paragraph::new(desc).alignment(Alignment::Center), rows[4]);
     f.render_widget(Paragraph::new(divider(rows[5].width, "⟡")), rows[5]);
 
-    // tiles need ~22 cols each; below that, fall back to a stacked list so nothing wraps.
-    if rows[6].width >= 22 * TILES.len() as u16 {
+    // tiles need room for the longest label across every column, plus height for even the
+    // squat 3-tall cards; below either threshold, fall back to a stacked list.
+    if rows[6].width >= menu_min_w() && rows[6].height >= menu_grid_h(*CARD_HEIGHTS.last().unwrap())
+    {
         menu_tiles(f, rows[6], app);
     } else {
         menu_list(f, rows[6], app);
     }
 
     f.render_widget(
-        footer(app, "←/→ move · 1-4 or Enter select · q quit"),
+        footer(app, "←/→/↑/↓ move · 1-4 or Enter select · q quit"),
         rows[7],
     );
 }
@@ -1284,22 +1295,71 @@ fn menu_cards(f: &mut Frame, area: Rect, app: &App) {
     }
 }
 
-/// Option A — the three options as a row of cards, with the active one's subtitle below.
+/// Card heights the menu grid will try, tallest first; the last is the floor.
+const CARD_HEIGHTS: [u16; 3] = [7, 5, 3];
+
+/// Narrowest menu area the tile grid can hold, derived from the longest label rather than a
+/// fixed number so renaming an option can't silently start clipping it. Per column: the label,
+/// the glyph a squat card prefixes onto the same row, the border ring, the inter-card gap and
+/// a column of breathing room either side.
+fn menu_min_w() -> u16 {
+    let longest = TILES.iter().map(|(_, n, _)| n.chars().count()).max().unwrap_or(0) as u16;
+    (longest + 9) * MENU_COLS as u16
+}
+
+/// Rows the tile grid needs for a given card height: the bands themselves, a blank row
+/// between each pair, then the gap + subtitle line underneath.
+fn menu_grid_h(card_h: u16) -> u16 {
+    let bands = TILES.len().div_ceil(MENU_COLS) as u16;
+    bands * card_h + (bands - 1) + 2
+}
+
+/// Option A — the options as a `MENU_COLS`-wide grid of cards, with the active one's
+/// subtitle below. Four options read as a 2×2 block rather than a long row.
 fn menu_tiles(f: &mut Frame, area: Rect, app: &App) {
+    let bands = TILES.len().div_ceil(MENU_COLS) as u16;
+    // take the tallest card the space allows: 7 rows is the roomy default (glyph and name
+    // floating in air), 5 trims the breathing room, 3 is the squat one-line fallback. The
+    // whole grid + blank gap + subtitle must fit, or the bands get squeezed and the cards
+    // lose their interior rows — `menu_grid_h` is the arithmetic menu_screen sizes against.
+    let card_h = *CARD_HEIGHTS
+        .iter()
+        .find(|h| area.height >= menu_grid_h(**h))
+        .unwrap_or(CARD_HEIGHTS.last().unwrap());
+    let grid_h = bands * card_h + (bands - 1); // one blank row between card bands
+
     let vt = Layout::vertical([
-        Constraint::Length(5), // tiles
+        Constraint::Length(grid_h),
         Constraint::Length(1), // gap
         Constraint::Length(1), // subtitle of the active tile
         Constraint::Min(0),
     ])
     .split(area);
 
-    let n = TILES.len() as u32;
-    let cols = Layout::horizontal(vec![Constraint::Ratio(1, n); n as usize]).split(vt[0]);
+    // the grid spans the full width: each card runs edge-to-midpoint, midpoint-to-edge.
+    let grid = vt[0];
+    let mut band_h = Vec::new();
+    for b in 0..bands {
+        if b > 0 {
+            band_h.push(Constraint::Length(1)); // gap
+        }
+        band_h.push(Constraint::Length(card_h));
+    }
+    let rows = Layout::vertical(band_h).split(grid);
+    let n = MENU_COLS as u32;
+    let cells: Vec<Rect> = rows
+        .iter()
+        .step_by(2) // skip the gap rows
+        .flat_map(|r| {
+            Layout::horizontal(vec![Constraint::Ratio(1, n); MENU_COLS])
+                .split(*r)
+                .to_vec()
+        })
+        .collect();
 
     for (i, (glyph, name, _sub)) in TILES.iter().enumerate() {
         let on = i == app.menu_sel;
-        let cell = cols[i].inner(Margin { horizontal: 1, vertical: 0 }); // gap between cards
+        let cell = cells[i].inner(Margin { horizontal: 1, vertical: 0 }); // gap between cards
         // all tiles are boxed with the same dark fill; only the *brightness* of the border,
         // glyph and name changes — the active one lights up, the others rest dim.
         let border_style = if on {
@@ -1330,10 +1390,23 @@ fn menu_tiles(f: &mut Frame, area: Rect, app: &App) {
             .title(Span::styled(format!(" {} ", i + 1), num_style));
         let inner = block.inner(cell);
         f.render_widget(block, cell);
-        let lines = vec![
-            Line::from(Span::styled(*glyph, glyph_style)),
-            Line::from(Span::styled(*name, name_style)),
-        ];
+        // a 3-tall card has one interior row, so glyph and name share it there.
+        let mut lines = if card_h >= 4 {
+            vec![
+                Line::from(Span::styled(*glyph, glyph_style)),
+                Line::from(Span::styled(*name, name_style)),
+            ]
+        } else {
+            vec![Line::from(vec![
+                Span::styled(format!("{glyph}  "), glyph_style),
+                Span::styled(*name, name_style),
+            ])]
+        };
+        // Paragraph draws from the top, so pad the leftover interior rows onto the front to
+        // sit the text in the middle of a roomy card (bias upward on an odd remainder).
+        for _ in 0..(inner.height.saturating_sub(lines.len() as u16) / 2) {
+            lines.insert(0, Line::default());
+        }
         f.render_widget(Paragraph::new(lines).alignment(Alignment::Center), inner);
     }
 
@@ -1671,3 +1744,9 @@ fn run(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> std::io::Resul
         }
     }
 }
+
+
+
+
+
+
