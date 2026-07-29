@@ -7,8 +7,8 @@ Output docs/playlist.gif
 
 Set Shell "bash"
 Set FontSize 22
-Set Width 1400
-Set Height 820
+Set Width 1500
+Set Height 840
 Set Padding 20
 Set Theme "Catppuccin Mocha"
 Set TypingSpeed 75ms

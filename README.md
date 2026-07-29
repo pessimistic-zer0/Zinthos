@@ -14,6 +14,10 @@ Searching by feel — a vibe query (`dark moody instrumental electronic`) return
 
 ![Zinthos TUI — search & similar tracks](docs/demo.gif)
 
+Finding songs like one you already know — name a track (`Midnight City` / `M83`), pick it out of the catalog candidates, and get its nearest neighbours; `s` again chases the thread one hop further.
+
+![Zinthos TUI — find similar songs by name](docs/similar.gif)
+
 Building a mood playlist — describe a vibe (`energetic upbeat happy dance pop`) and get a smoothly transition-ordered set.
 
 ![Zinthos TUI — mood playlist](docs/playlist.gif)
@@ -33,8 +37,9 @@ Scanning a local library — point it at a folder of audio files; it reads their
 │ audio_features   │──▶│ builder.cpp  │──▶│ supervised autoencoder│──▶│ /playlist      │◀──│ client   │
 │ source_b.csv     │   │ → master.db  │   │ → 10D embeddings      │   │ /artist /track │   │ (HTTP)   │
 └──────────────────┘   │ (10-table    │   │ → embeddings.faiss    │   │ /search/similar│   └──────────┘
-                       │  normalized) │   └──────────────────────┘   │ + LLM fallback │
-                       └──────────────┘                              └────────────────┘
+                       │  normalized) │   └──────────────────────┘   │ /search/by-name│
+                       └──────────────┘                              │ + LLM fallback │
+                                                                     └────────────────┘
 ```
 
 | Layer | Tech | Directory |
@@ -102,7 +107,7 @@ Configuration is via environment variables (see [`backend/engine/config.py`](bac
 
 ## Status
 
-The engine is feature-complete: semantic search, playlist generation with transition optimization, artist/track details, similar-track retrieval with a two-stage FAISS + re-rank, and local-library identity matching. Mood classification is a planned phase-2 addition.
+The engine is feature-complete: semantic search, playlist generation with transition optimization, artist/track details, similar-track retrieval with a two-stage FAISS + re-rank (from a result, a scanned file, or a track named by title/artist), and local-library identity matching. Mood classification is a planned phase-2 addition.
 
 ## License
 

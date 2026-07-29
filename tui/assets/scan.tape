@@ -8,8 +8,8 @@ Output docs/scan.gif
 
 Set Shell "bash"
 Set FontSize 22
-Set Width 1400
-Set Height 820
+Set Width 1500
+Set Height 840
 Set Padding 20
 Set Theme "Catppuccin Mocha"
 Set TypingSpeed 75ms
@@ -33,8 +33,9 @@ Sleep 600ms
 Enter
 
 # ── scan: read local tags → identity-match against the 255M catalog ──
-# (~100 files ≈ a few seconds; bump this if you point it at a larger folder)
-Sleep 5s
+# ~40-track hardlinked sample (see assets/CLAUDE.md) so this finishes fast. If the
+# GIF cuts off mid-scan, raise this; if it sits idle at the end, lower it.
+Sleep 6s
 
 # ── walk the matched library + taste breakdown ──
 Down
