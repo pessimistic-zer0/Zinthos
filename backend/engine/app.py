@@ -10,6 +10,11 @@ SQLite reads, faiss.search(), the urllib LLM call — never blocks the event loo
 `async def` handler here would run that blocking work ON the loop and serialize the whole
 engine (one stuck LLM call = even /health frozen). Only /health stays async: it touches
 nothing blocking, so liveness answers instantly even when all worker threads are busy.
+
+The contract covers DEPENDENCIES too, not just handlers: FastAPI dispatches each `Depends`
+callable by its OWN signature, so a plain `def` dependency is sent to the same capped
+threadpool even from an `async def` route. A route is loop-only when the route AND every
+dependency it declares are async — hence `get_index`/`require_auth` below are `async def`.
 """
 from __future__ import annotations
 
@@ -66,7 +71,10 @@ async def require_auth() -> None:
     return None
 
 
-def get_index(request: Request) -> VectorIndex:
+async def get_index(request: Request) -> VectorIndex:
+    """Async on purpose: a sync dependency would be sent to the capped threadpool (see the
+    module docstring), so /health could queue behind 8 busy workers — the exact case it must
+    survive, since the TUI probes /health to decide whether to spawn another engine."""
     return request.app.state.index
 
 
