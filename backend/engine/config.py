@@ -52,6 +52,18 @@ class Config:
     # search over this many is still single-digit ms. Env-overridable for tuning.
     faiss_topk: int = int(_env("SONIC_FAISS_TOPK", "1500"))  # candidates before re-rank
     default_k: int = 20                                   # results returned
+    # F6 re-rank: how a candidate's cosine is mapped onto the 0–1 scale the other four terms
+    # already use. "clipped" scales against the POOL's own percentile range; "legacy" is the
+    # old (cos+1)/2 map of the THEORETICAL [-1,1] range, kept only for A/B-ing by ear. See
+    # similar._normalize_sim for why legacy left the similarity term inert.
+    sim_norm: str = _env("SONIC_SIM_NORM", "clipped")     # "clipped" | "legacy"
+    # Percentile trimmed off EACH end before scaling (clipped only). Duplicate catalog copies
+    # arrive at cos≈1.0 and with a plain min/max would set the ruler's top for the whole pool.
+    sim_clip_pct: float = float(_env("SONIC_SIM_CLIP_PCT", "1.0"))
+    # F6 region/sonic terms, sourced from the separately-built track_tags table. Set 0 to A/B the
+    # re-rank without them; they also switch themselves off if the table is missing or its bit
+    # assignment has drifted from engine.tagfamily (see similar.init_tags).
+    tag_terms: bool = _env("SONIC_TAG_TERMS", "1") not in ("0", "false", "False", "")
     # F1 reshuffle: a seeded "different songs" draw samples within the top-N most popular
     # matches (index-fast pool) — bounds the work so a broad mood query doesn't full-scan/sort.
     reshuffle_pool: int = int(_env("SONIC_RESHUFFLE_POOL", "600"))

@@ -44,6 +44,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     idx.warmup(CONFIG.warmup_queries())
     app.state.index = idx
     app.state.last_request = time.time()
+    # Verify the track_tags bit assignment BEFORE serving: a reordered tagfamily dict would make
+    # 93.7M stored masks decode to the wrong families with no error anywhere. init_tags() turns
+    # the terms off rather than trusting them, and returns the line to log either way.
+    print(f"  {similar.init_tags()}")
     print(f"engine ready: {idx.ntotal:,} vectors mmap'd, warmed in {time.time()-t:.1f}s "
           f"({CONFIG.worker_threads} worker threads)")
     yield
@@ -159,4 +163,6 @@ def search_similar(
     results = similar.find_similar(idx, track_id, k)
     if not results:
         raise HTTPException(status_code=404, detail=f"no embedding or similars for track {track_id}")
-    return {"seed": track_id, "count": len(results), "results": results}
+    # `norm` echoes the active cosine scaling (SONIC_SIM_NORM) so an A/B by ear can't get
+    # confused about which ranking it's listening to.
+    return {"seed": track_id, "count": len(results), "results": results, "norm": CONFIG.sim_norm}
