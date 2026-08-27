@@ -47,6 +47,11 @@ def query(sql: str, params: Sequence[Any] = ()) -> list[sqlite3.Row]:
     return conn().execute(sql, params).fetchall()
 
 
+def has_table(name: str) -> bool:
+    """Whether a table exists in master.db — for optional, separately-built tables (track_tags)."""
+    return bool(query("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)))
+
+
 def placeholders(n: int) -> str:
     """`?,?,?` for an IN-clause of n ids."""
     return ",".join("?" * n)
