@@ -48,6 +48,22 @@ def _norm(text: str) -> str:
     return _WS.sub(" ", t).strip()
 
 
+# Apostrophes are ELIDED (not spaced) for the dedupe key: _NONWORD turns them into a space, so
+# "What's Done Is Done" and "Whats Done Is Done" — the same song, two taggers — would not collapse.
+_APOS = re.compile(r"['‘’ʼ`]")
+
+
+def fold(text: str) -> str:
+    """Display-string folding for hydrate.dupe_key — 'same folded string' means 'same song'.
+
+    Deliberately NOT match_key's exact folding: it elides apostrophes first. match_key must stay
+    byte-identical to what build_track_match.py wrote into track_match.norm_key (see the module
+    docstring — changing _norm silently un-matches the whole sidecar), whereas this key is
+    computed fresh on both sides of every comparison and is free to be stricter.
+    """
+    return _norm(_APOS.sub("", text))
+
+
 def match_key(title: str | None, artist: str | None) -> str | None:
     """`"<norm title>|<norm artist>"`, or None if either side is empty after folding."""
     if not title or not artist:

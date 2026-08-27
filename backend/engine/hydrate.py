@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import Any
 
 from . import db
+from .textnorm import fold
 
 # group_concat with an explicit ORDER BY needs SQLite ≥ 3.44; artist_position gives credited-ish order.
 _HYDRATE_SQL = """
@@ -39,12 +40,23 @@ def hydrate_one(track_id: int) -> dict[str, Any] | None:
 
 
 def dupe_key(r: dict[str, Any]) -> tuple[str, str]:
-    return (str(r.get("title", "")).strip().lower(),
-            str(r.get("artists", "")).strip().lower())
+    """Collapse-key for catalog copies of one recording.
+
+    Uses textnorm.fold — the SAME folding that builds track_match.norm_key — so the decorative
+    variance the catalog is full of collapses instead of eating result slots: 'Mere Khayal Se
+    Tum (From "Balmaa")' == 'Mere Khayal Se Tum', 'Liefje - Single Remix' == 'Liefje (Single
+    remix)', "What's Done Is Done" == 'Whats Done Is Done'.
+
+    Artists are folded but NOT reordered or subsetted, so copies credited to different SUBSETS
+    of the same lineup ('Dilraj Kaur, Preeti Sagar' vs 'Dilraj Kaur, Om Prakash, Preeti Sagar')
+    still read as distinct. Fixing that needs subset/overlap matching, which isn't an
+    equivalence relation — a `seen` set can't express it. See the F6 notes.
+    """
+    return (fold(str(r.get("title", ""))), fold(str(r.get("artists", ""))))
 
 
 def dedupe(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Drop catalog duplicates by (title, artists), keeping the first (highest-ranked)."""
+    """Drop catalog duplicates by the folded (title, artists) key, keeping the first (highest-ranked)."""
     seen: set[tuple[str, str]] = set()
     out: list[dict[str, Any]] = []
     for r in records:
