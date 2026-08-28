@@ -15,6 +15,7 @@ ureq = { version = "2", default-features = false, features = ["json"] }  # plain
 serde_json = "1"
 lofty = "0.24"                                        # pure-Rust audio tag reader (no system libs)
 walkdir = "2"                                         # recursive directory walk for the library scan
+unicode-width = "0.2"                                 # caret/scroll maths in input_box (already in-tree via ratatui)
 
 [profile.release]
 opt-level = 3

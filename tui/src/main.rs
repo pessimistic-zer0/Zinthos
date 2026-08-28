@@ -24,6 +24,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders, List, ListItem, ListState, Paragraph, Wrap};
 use ratatui::Frame;
 use serde_json::Value;
+use unicode_width::UnicodeWidthChar;
 
 const DEFAULT_URL: &str = "http://127.0.0.1:3000";
 const PAGE: usize = 50;
@@ -135,6 +136,12 @@ fn hist(v: &Value, arr_key: &str, label_key: &str) -> Vec<(String, u64)> {
 
 fn dedupe_key(v: &Value) -> (String, String) {
     (s(v, "title").to_lowercase(), s(v, "artists").to_lowercase())
+}
+
+/// `Title — artists`: the one-line identity of a track, for the similar-results header.
+fn label_of(v: &Value) -> String {
+    let (t, a) = (s(v, "title"), s(v, "artists"));
+    if a.is_empty() { t } else { format!("{t} — {a}") }
 }
 
 // ── local-library tag extraction (runs on the worker thread) ──────────────────────
@@ -537,10 +544,45 @@ impl TextField {
     }
 }
 
-/// Render a bordered input box and place the (visible) terminal cursor inside it.
+/// Render a bordered input box, scrolled so the caret stays visible, and place the (visible)
+/// terminal cursor on it.
+///
+/// The scroll is the point: a Paragraph clips at the border and the caret used to pin to the
+/// last column, so everything typed past the box width went in BLIND. That bites on a mood
+/// description and hardest on the scan path, where an absolute path routinely outruns an
+/// 80-column box. Columns, not chars — a CJK title is double-width, so counting chars would
+/// drift the caret away from the glyph it is meant to sit on.
+///
+/// The window is derived from the caret each frame rather than stored: walking back from the
+/// caret keeps it pinned to the right edge once the value overflows, and the text scrolls
+/// under it when moving left. A remembered scroll offset would let the caret travel to the
+/// left edge before scrolling, but it would have to live in TextField and be fed the box
+/// width — state this screen does not otherwise need.
 fn input_box(f: &mut Frame, area: Rect, title: &str, field: &TextField, focus: bool) {
     let border = if focus { Color::Cyan } else { Color::DarkGray };
-    let p = Paragraph::new(field.value.as_str()).block(
+    let inner = area.width.saturating_sub(2) as usize;
+    let chars: Vec<char> = field.value.chars().collect();
+    let cw = |c: char| UnicodeWidthChar::width(c).unwrap_or(0);
+
+    // Widen the window leftwards from the caret while it fits, keeping one column spare so
+    // the caret has somewhere to sit when it is at end-of-text.
+    let mut start = field.cursor.min(chars.len());
+    let mut before = 0usize; // columns between `start` and the caret
+    while start > 0 && before + cw(chars[start - 1]) < inner {
+        start -= 1;
+        before += cw(chars[start]);
+    }
+    let mut text = String::new();
+    let mut used = 0usize;
+    for &c in &chars[start..] {
+        if used + cw(c) > inner {
+            break;
+        }
+        text.push(c);
+        used += cw(c);
+    }
+
+    let p = Paragraph::new(text).block(
         Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
@@ -550,9 +592,37 @@ fn input_box(f: &mut Frame, area: Rect, title: &str, field: &TextField, focus: b
     f.render_widget(p, area);
     if focus {
         let max_x = area.x + area.width.saturating_sub(2);
-        let cx = (area.x + 1 + field.cursor as u16).min(max_x);
+        let cx = (area.x + 1 + before as u16).min(max_x);
         f.set_cursor_position(Position::new(cx, area.y + 1));
     }
+}
+
+/// A read-only companion to `input_box`: same frame, no cursor, no focus colour. For context
+/// the user is meant to READ, not type into — e.g. which track the similars belong to.
+fn label_box(f: &mut Frame, area: Rect, title: &str, text: &str) {
+    let p = Paragraph::new(Span::styled(text.to_string(), Style::default().fg(LAVENDER))).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .title(format!(" {title} "))
+            .border_style(Style::default().fg(Color::DarkGray)),
+    );
+    f.render_widget(p, area);
+}
+
+/// The shared-list state one screen owns. `App.results` is a SINGLE buffer that the search
+/// page, the by-name pick-list, the library recommendations and the similars page all render
+/// from, so launching a similars search destroys whatever list was under it. This is the
+/// one-level undo that lets Esc put that list back exactly as it was.
+struct Stash {
+    results: Vec<Value>,
+    seen: HashSet<(String, String)>,
+    sel: Option<usize>,
+    source: String,
+    status: String,
+    offset: usize,
+    seed: u32,
+    pageable: bool,
 }
 
 struct App {
@@ -579,6 +649,13 @@ struct App {
     detail_from: Mode,
     status: String,
     source: String,
+    // ── similar-results context ──────────────────────────────────────────────────
+    // A similar list is NOT a query result: it has a seed track and an origin screen. The
+    // Query box means nothing for it, and `r`/`/` (which re-run or edit last_query) are worse
+    // than useless — `r` used to silently swap the similars for a reshuffle of a STALE search.
+    similar_seed: String, // "Title — artists" of the seed, shown instead of the Query box
+    similar_from: Mode,   // where Esc returns (Candidates for the by-name flow, Library, …)
+    stash: Option<Stash>, // that screen's list, parked while the similars borrow the buffer
     spinner: usize,
     frame: u64, // monotonic tick for ambient animation (starfield, glow)
     rx: Option<Receiver<Done>>,
@@ -618,6 +695,9 @@ impl App {
             detail_from: Mode::Results,
             status: String::new(),
             source: String::new(),
+            similar_seed: String::new(),
+            similar_from: Mode::Menu,
+            stash: None,
             spinner: 0,
             frame: 0,
             rx: None,
@@ -640,6 +720,62 @@ impl App {
             .and_then(|i| self.results.get(i))
             .and_then(|r| r.get("track_id"))
             .and_then(Value::as_i64)
+    }
+
+    fn selected_label(&self) -> String {
+        self.list
+            .selected()
+            .and_then(|i| self.results.get(i))
+            .map(label_of)
+            .unwrap_or_default()
+    }
+
+    /// Launch a similars search, recording WHAT it is for and WHERE Esc goes back to.
+    /// Chaining `s` off an existing similar list keeps the ORIGINAL origin, so Esc still lands
+    /// on the screen the chain started from instead of cycling inside Mode::Results.
+    fn start_similar(&mut self, seed: String) {
+        if self.busy() {
+            return; // start() would drop the job — don't stash a screen we aren't leaving.
+        }
+        if let Some(id) = self.selected_id() {
+            // Only the FIRST hop out of a real screen stashes. Chaining `s` down a similars
+            // list keeps the original stash, so Esc lands where the chain began rather than
+            // parking a similars list on top of itself.
+            if self.source != "similar" {
+                self.similar_from = self.mode;
+                // Clone, don't take: the origin screen keeps rendering this list until the
+                // job lands (and keeps it for good if the job errors out).
+                self.stash = Some(Stash {
+                    results: self.results.clone(),
+                    seen: self.seen.clone(),
+                    sel: self.list.selected(),
+                    source: self.source.clone(),
+                    status: self.status.clone(),
+                    offset: self.offset,
+                    seed: self.seed,
+                    pageable: self.pageable,
+                });
+            }
+            self.similar_seed = seed;
+            self.start(Job::Similar(id));
+        }
+    }
+
+    /// Esc out of a similars list: restore the borrowed buffer, then return to its screen.
+    /// Restoring also clears `source`, which is what stops a second Esc looping back here.
+    fn leave_similar(&mut self) {
+        if let Some(st) = self.stash.take() {
+            self.results = st.results;
+            self.seen = st.seen;
+            self.list.select(st.sel);
+            self.source = st.source;
+            self.status = st.status;
+            self.offset = st.offset;
+            self.seed = st.seed;
+            self.pageable = st.pageable;
+        }
+        self.similar_seed.clear();
+        self.mode = self.similar_from;
     }
 
     // ── async job plumbing ────────────────────────────────────────────────────────
@@ -893,39 +1029,58 @@ impl App {
                     self.query.handle(code, ctrl);
                 }
             },
-            Mode::Results => match code {
-                KeyCode::Esc => self.mode = Mode::Search,
-                KeyCode::Char('q') => self.mode = Mode::Menu,
-                KeyCode::Char('/') | KeyCode::Char('i') => self.mode = Mode::Search,
-                KeyCode::Up => self.move_sel(-1),
-                KeyCode::Down => self.down(),
-                KeyCode::Char('k') if self.vim => self.move_sel(-1),
-                KeyCode::Char('j') if self.vim => self.down(),
-                KeyCode::Char('s') => {
-                    if let Some(id) = self.selected_id() {
-                        self.start(Job::Similar(id));
+            Mode::Results => {
+                // Mode::Results renders TWO different lists: a semantic-search page (backed by
+                // last_query, pageable, reshufflable) and a similars page (backed by a seed
+                // track). Only the first has a query, so gate the query-shaped keys on it.
+                let sim = self.source == "similar";
+                match code {
+                    KeyCode::Esc => {
+                        if sim {
+                            self.leave_similar();
+                        } else {
+                            self.mode = Mode::Search;
+                        }
                     }
-                }
-                KeyCode::Char('r') => self.reshuffle(),
-                KeyCode::Enter => {
-                    if let Some(id) = self.selected_id() {
-                        self.detail_from = Mode::Results;
-                        self.start(Job::Detail(id));
+                    KeyCode::Char('q') => {
+                        // Bailing to the menu abandons the chain rather than suspending it:
+                        // a stash left armed here would let a later Esc — reached from an
+                        // unrelated screen — teleport into a pick-list the user has moved on
+                        // from. `results` keeps the similars; only the way back is dropped.
+                        self.stash = None;
+                        self.similar_seed.clear();
+                        self.source.clear();
+                        self.mode = Mode::Menu;
                     }
+                    KeyCode::Char('/') | KeyCode::Char('i') if !sim => self.mode = Mode::Search,
+                    KeyCode::Up => self.move_sel(-1),
+                    KeyCode::Down => self.down(),
+                    KeyCode::Char('k') if self.vim => self.move_sel(-1),
+                    KeyCode::Char('j') if self.vim => self.down(),
+                    KeyCode::Char('s') => self.start_similar(self.selected_label()),
+                    KeyCode::Char('r') => {
+                        if sim {
+                            self.status = "reshuffle applies to search results — Esc to go back".into();
+                        } else {
+                            self.reshuffle();
+                        }
+                    }
+                    KeyCode::Enter => {
+                        if let Some(id) = self.selected_id() {
+                            self.detail_from = Mode::Results;
+                            self.start(Job::Detail(id));
+                        }
+                    }
+                    _ => {}
                 }
-                _ => {}
-            },
+            }
             Mode::Library => match code {
                 KeyCode::Esc | KeyCode::Char('q') => self.mode = Mode::Menu,
                 KeyCode::Up => self.move_sel(-1),
                 KeyCode::Down => self.move_sel(1),
                 KeyCode::Char('k') if self.vim => self.move_sel(-1),
                 KeyCode::Char('j') if self.vim => self.move_sel(1),
-                KeyCode::Char('s') => {
-                    if let Some(id) = self.selected_id() {
-                        self.start(Job::Similar(id));
-                    }
-                }
+                KeyCode::Char('s') => self.start_similar(self.selected_label()),
                 KeyCode::Enter => {
                     if let Some(id) = self.selected_id() {
                         self.detail_from = Mode::Library;
@@ -936,10 +1091,10 @@ impl App {
             },
             Mode::Detail => match code {
                 KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q') => self.mode = self.detail_from,
+                // The card, not the list row: they agree today, but the card is what's on screen.
                 KeyCode::Char('s') => {
-                    if let Some(id) = self.selected_id() {
-                        self.start(Job::Similar(id));
-                    }
+                    let seed = label_of(self.detail.as_ref().unwrap_or(&Value::Null));
+                    self.start_similar(seed);
                 }
                 _ => {}
             },
@@ -996,11 +1151,7 @@ impl App {
                 KeyCode::Char('k') if self.vim => self.move_sel(-1),
                 KeyCode::Char('j') if self.vim => self.move_sel(1),
                 // the whole point of this screen: pick a track → songs like it.
-                KeyCode::Enter | KeyCode::Char('s') => {
-                    if let Some(id) = self.selected_id() {
-                        self.start(Job::Similar(id));
-                    }
-                }
+                KeyCode::Enter | KeyCode::Char('s') => self.start_similar(self.selected_label()),
                 _ => {}
             },
         }
@@ -1058,10 +1209,20 @@ fn fetch(agent: &ureq::Agent, base: &str, path: &str, params: &[(&str, &str)]) -
     for (k, v) in params {
         req = req.query(k, v);
     }
-    req.call()
-        .map_err(|e| e.to_string())?
-        .into_json::<Value>()
-        .map_err(|e| e.to_string())
+    match req.call() {
+        Ok(r) => r.into_json::<Value>().map_err(|e| e.to_string()),
+        // ureq hands the RESPONSE back on 4xx/5xx, and the engine puts a human-readable reason
+        // in `detail` ("no embedding or similars for track N" — a normal outcome, since not
+        // every catalog track is embedded). Mapping straight to e.to_string() would show the
+        // user "http status: 404" and nothing to act on.
+        Err(ureq::Error::Status(code, resp)) => Err(resp
+            .into_json::<Value>()
+            .ok()
+            .map(|v| s(&v, "detail"))
+            .filter(|d| !d.is_empty())
+            .unwrap_or_else(|| format!("engine returned HTTP {code}"))),
+        Err(e) => Err(e.to_string()),
+    }
 }
 
 fn run_job(agent: &ureq::Agent, base: &str, job: Job) -> Done {
@@ -1655,8 +1816,15 @@ fn query_screen(f: &mut Frame, app: &mut App) {
     let rows = Layout::vertical([Constraint::Length(3), Constraint::Min(0), Constraint::Length(1)])
         .split(f.area());
 
-    let focus = app.mode == Mode::Search;
-    input_box(f, rows[0], "Query", &app.query, focus);
+    // The similars list came from a SEED TRACK, not a typed query, so the editable Query box
+    // is replaced by a read-only reminder of what's being matched — which the screen otherwise
+    // never states. See the Mode::Results key handler for the matching key changes.
+    let is_sim = app.source == "similar" && app.mode != Mode::Search;
+    if is_sim {
+        label_box(f, rows[0], "Similar to", &app.similar_seed);
+    } else {
+        input_box(f, rows[0], "Query", &app.query, app.mode == Mode::Search);
+    }
 
     match app.mode {
         Mode::Detail => {
@@ -1683,7 +1851,7 @@ fn query_screen(f: &mut Frame, app: &mut App) {
             } else {
                 app.results.iter().map(rec_item).collect()
             };
-            let label = if is_pl { "Playlist" } else { "Results" };
+            let label = if is_pl { "Playlist" } else if is_sim { "Similar" } else { "Results" };
             let list = List::new(items)
                 .block(outer(format!("{label} ({})", app.results.len())))
                 .highlight_style(Style::default().bg(Color::Blue).add_modifier(Modifier::BOLD))
@@ -1692,14 +1860,16 @@ fn query_screen(f: &mut Frame, app: &mut App) {
         }
     }
 
+    let mv = if app.vim { "j/k move" } else { "↑/↓ move" };
     let help = match app.mode {
-        Mode::Search => "←/→ edit · Ctrl-W del word · Enter search · ↓ results · Esc menu",
-        Mode::Results if app.vim => "j/k move · Enter open · s similar · r reshuffle · / edit · Esc query · q menu",
-        Mode::Results => "↑/↓ move · Enter open · s similar · r reshuffle · / edit · Esc query · q menu",
-        Mode::Detail => "s similar · Esc back",
-        _ => "",
+        Mode::Search => "←/→ edit · Ctrl-W del word · Enter search · ↓ results · Esc menu".into(),
+        // No `r`/`/` for similars: there is no query behind them to reshuffle or edit.
+        Mode::Results if is_sim => format!("{mv} · Enter open · s similar · Esc back · q menu"),
+        Mode::Results => format!("{mv} · Enter open · s similar · r reshuffle · / edit · Esc query · q menu"),
+        Mode::Detail => "s similar · Esc back".into(),
+        _ => String::new(),
     };
-    f.render_widget(footer(app, help), rows[2]);
+    f.render_widget(footer(app, &help), rows[2]);
 }
 
 fn main() -> std::io::Result<()> {
