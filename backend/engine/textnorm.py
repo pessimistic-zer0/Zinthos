@@ -51,6 +51,17 @@ def _norm(text: str) -> str:
 # Apostrophes are ELIDED (not spaced) for the dedupe key: _NONWORD turns them into a space, so
 # "What's Done Is Done" and "Whats Done Is Done" — the same song, two taggers — would not collapse.
 _APOS = re.compile(r"['‘’ʼ`]")
+# Dedupe-ONLY decorations. _DASH_TAIL is frozen (it is baked into track_match.norm_key), but the
+# catalog's Indian re-releases use tails it never knew: 'X - From "Balmaa"', 'X - Jhankar Beats',
+# 'X (With Jhankar Beats) - From "Balmaa"', 'X - Sped Up'. Each of those was a separate dupe key,
+# which is how the seed's own copies came back as "similar" and why Mere Khayal Se Tum took two
+# result slots. Applied in fold() only, so match_key stays byte-identical to the sidecar.
+_DEDUPE_TAIL = re.compile(
+    r"\s-\s.*\b(from|jhankar|beats|sped up|slowed|reverb|karaoke|lofi|lo-fi|8d|revisited|"
+    r"reprise|cover|unplugged|remaster(ed)?|dj mix|club mix)\b.*$",
+    re.IGNORECASE,
+)
+_WITH_BEATS = re.compile(r"\bwith\s+(jhankar|heart)\s+beats\b", re.IGNORECASE)
 
 
 def fold(text: str) -> str:
@@ -61,7 +72,10 @@ def fold(text: str) -> str:
     docstring — changing _norm silently un-matches the whole sidecar), whereas this key is
     computed fresh on both sides of every comparison and is free to be stricter.
     """
-    return _norm(_APOS.sub("", text))
+    t = _APOS.sub("", text)
+    t = _DEDUPE_TAIL.sub(" ", t)
+    t = _WITH_BEATS.sub(" ", t)
+    return _norm(t)
 
 
 def match_key(title: str | None, artist: str | None) -> str | None:

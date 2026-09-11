@@ -160,9 +160,11 @@ def search_by_name(title: str, artist: str = "", limit: int = 10) -> dict[str, o
 def search_similar(
     track_id: int, idx: VectorIndex = Depends(get_index), k: int = CONFIG.default_k
 ) -> dict[str, object]:
-    results = similar.find_similar(idx, track_id, k)
+    info: dict[str, object] = {}
+    results = similar.find_similar(idx, track_id, k, info)
     if not results:
         raise HTTPException(status_code=404, detail=f"no embedding or similars for track {track_id}")
-    # `norm` echoes the active cosine scaling (SONIC_SIM_NORM) so an A/B by ear can't get
-    # confused about which ranking it's listening to.
-    return {"seed": track_id, "count": len(results), "results": results, "norm": CONFIG.sim_norm}
+    # `norm` echoes the active cosine scaling (SONIC_SIM_NORM) and `gate` which tag axes cut the
+    # pool (SONIC_TAG_GATE), so an A/B by ear can't get confused about which ranking it's hearing.
+    return {"seed": track_id, "count": len(results), "results": results, "norm": CONFIG.sim_norm,
+            "gate": info.get("gate", ""), "pool": info.get("pool", 0)}

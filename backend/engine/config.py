@@ -64,6 +64,18 @@ class Config:
     # re-rank without them; they also switch themselves off if the table is missing or its bit
     # assignment has drifted from engine.tagfamily (see similar.init_tags).
     tag_terms: bool = _env("SONIC_TAG_TERMS", "1") not in ("0", "false", "False", "")
+    # F6 tag GATE: when the seed carries a region (or sonic) family and at least tag_gate_min
+    # candidates share it, the pool is CUT to those candidates before scoring, instead of merely
+    # giving them a bonus. Measured on Chura Ke Dil Mera: the top-1500 pool spans cosine
+    # 0.991-1.000 with region purity flat across rank (37/30/29/26%), so the embedding cannot
+    # push the jazz/salsa intruders out by itself — the artist-genre fact has to. Each axis gates
+    # independently and only when it applies (metal has no region; the floor keeps a thin match
+    # from collapsing the pool to a handful). The floor is LOW on purpose: a modern Bollywood
+    # ballad (Tum Hi Ho) has only 44 South Asian candidates in its 1300-wide pool and a rock
+    # seed (Bohemian Rhapsody) 60 rock ones — at 100 neither gated and the top-10 stayed mixed.
+    # similar._gate also never lets it drop below 2·k. Set 0 to A/B the additive-only blend.
+    tag_gate: bool = _env("SONIC_TAG_GATE", "1") not in ("0", "false", "False", "")
+    tag_gate_min: int = int(_env("SONIC_TAG_GATE_MIN", "40"))
     # F1 reshuffle: a seeded "different songs" draw samples within the top-N most popular
     # matches (index-fast pool) — bounds the work so a broad mood query doesn't full-scan/sort.
     reshuffle_pool: int = int(_env("SONIC_RESHUFFLE_POOL", "600"))

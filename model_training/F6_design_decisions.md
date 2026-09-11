@@ -321,3 +321,43 @@ on a ≥16 GB-VRAM card.)
 - Mood detection (separate multi-label classifier) — future.
 - Possible v2: semi-supervised reconstruction on the unlabeled tracks; revisit α with a
   product-quality (not proxy) metric once the search feature is live and measurable.
+
+---
+
+## 11. Addendum (2026-09-10) — measuring the "Bollywood seed returns jazz" report
+
+Measured on the live index before touching code (scripts in the session scratchpad; numbers
+below are from those runs). **Killed:** index recall (exact kNN overlaps the IVF pool
+1478–1498/1500), cosine-vs-L2, seed-near-origin, popularity fame tilt (the pool is 77% pop=0).
+**Confirmed, in order of weight:**
+
+1. **13-feature ceiling.** In scaled 13-D the jazz members of Chura Ke Dil Mera's pool are
+   *closer* to the seed (median 1.09) than the labeled-asian ones (1.30). No encoder on these
+   inputs can undo that. A GBDT from the 13 features to artist-genre REGION reaches AUC 0.84
+   (south_asian vs other regions), 0.92 vs jazz, 44% 9-way accuracy — partial signal, comparable
+   to the genre head's 45%, so a region head on the SAE would help, not cure.
+2. **Taxonomy / album-level labels.** Tracks by `bollywood`-tagged artists are labeled asian
+   46% / soundtrack 43% in ground truth; the SAE was taught half of Bollywood is film-score.
+3. **Flat pool.** The top-1500 spans cosine 0.991–1.000 and region purity is flat by rank
+   (37/30/29/26% per quartile), so W_SIM=0.60 mostly amplified noise.
+4. **Dedupe gaps.** `- From "Balmaa"`, `- Jhankar Beats` tails and artist-SUBSET credits
+   ('Arijit Singh' vs 'Arijit Singh, Mithoon') were distinct keys; the seed's own copies came
+   back through them. Agúzate held 78 of 1500 slots via identical-vector copies.
+
+**Changes (branch f6/rerank-normalization-and-tag-families):**
+- `similar._gate`: cut the pool to candidates sharing the seed's region, then sonic, family
+  (each axis independently, floor `max(SONIC_TAG_GATE_MIN=40, 2k)`); `SONIC_TAG_GATE=0` to A/B.
+  The response echoes `gate` and `pool`.
+- `similar._collapse_copies`: one candidate per equal-score run (identical vectors), no DB
+  probe; `_retrieve` widens once (4×) and caps back to N when a mega-hit's copies ate the pool.
+  An ISRC probe on `tracks` did this at 300–900 ms cold and was reverted — see memory note.
+- `hydrate._Seen`: dedupe on ISRC ∪ folded title+artists ∪ same-title-with-overlapping-credit
+  (containment, 'the' stripped, 'Various Artists' = wildcard); seed excluded by the same rules.
+- `textnorm.fold`: dedupe-only tail strip (`from`, `jhankar`, `sped up`, …); `match_key` untouched.
+- Weights 0.60/0.05/0.10/0.05/0.05/0.05/0.10 → **0.50/0.05/0.10/0.05/0.05/0.10/0.15**.
+
+**Result (9 seeds, k=10, warm):** region/sonic agreement in the top-10 went from 2–9/10 to
+10/10 on every gated seed (Chura, Slayer, Take Five, Dynamite, Gasolina, Shape of You, Tum Hi
+Ho, Moth to a Flame, Bohemian Rhapsody); seed copies 0/10 everywhere; latency 33–71 ms warm.
+Covers by a different artist ('Take Five — Illinois Jacquet') are kept on purpose. Known leaks:
+misspelled titles ('Tum He Ho'), tails not in the strip list ('- Episode 78').

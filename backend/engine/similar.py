@@ -1,8 +1,10 @@
 """F6 — perceptually-similar tracks: FAISS top-N → two-stage re-rank → hydrate top-k.
 
 Re-rank weights (tuned from the PRD's originals — see the W_* constants below):
-    0.60·embedding_sim + 0.10·tempo_prox + 0.10·sonic_family + 0.05·genre_match
-  + 0.05·popularity + 0.05·era_prox + 0.05·region_family
+    0.50·embedding_sim + 0.10·tempo_prox + 0.15·sonic_family + 0.05·genre_match
+  + 0.05·popularity + 0.05·era_prox + 0.10·region_family
+  after (a) collapsing catalog copies (equal-score runs) and (b) GATING the pool to the seed's region/sonic
+  family when enough candidates share it (CONFIG.tag_gate).
 The seed's own row + the N candidates are fetched in ONE track_search query (cheap numeric
 work); only the final k are hydrated (expensive joins). N (CONFIG.faiss_topk) is fetched WIDE
 so a mega-hit's own catalog copies don't crowd out genuinely-distinct neighbours.
@@ -38,7 +40,13 @@ from .index import VectorIndex
 # STATED FACTS about the artist. Where both exist the fact should outrank the guess. These two
 # split 0.15 rather than stacking a 6th term on top, so the blend still sums to 1.0.
 # ⚠ UNTUNED BY EAR — this split is reasoned, not heard. See the F6 notes before trusting it.
-W_SIM, W_GENRE, W_TEMPO, W_POP, W_ERA, W_REGION, W_SONIC = 0.60, 0.05, 0.10, 0.05, 0.05, 0.05, 0.10
+# RE-TUNED again (2026-09) after measuring the pool: on Chura Ke Dil Mera the 1500 candidates
+# span cosine 0.991-1.000 and their region purity is FLAT across rank (37/30/29/26% by quartile),
+# so sim's 0.60 was mostly amplifying noise while the one term with real signal — region, a
+# stated fact about the artist — sat at 0.05. 0.10 moves from sim to the two tag terms. With
+# the tag GATE on (CONFIG.tag_gate) region is constant inside a gated pool and its weight only
+# matters for seeds whose gate did not fire (no tags, or a thin match).
+W_SIM, W_GENRE, W_TEMPO, W_POP, W_ERA, W_REGION, W_SONIC = 0.50, 0.05, 0.10, 0.05, 0.05, 0.10, 0.15
 TEMPO_SCALE = 60.0   # BPM gap at which tempo_prox → 0
 ERA_SCALE = 40.0     # year gap at which era_prox → 0
 
@@ -118,11 +126,82 @@ def _normalize_sim(cos: np.ndarray) -> np.ndarray:
     return np.clip((cos - lo) / (hi - lo), 0.0, 1.0)
 
 
-def find_similar(index: VectorIndex, track_id: int, k: int) -> list[dict[str, Any]]:
+def _collapse_copies(hits: list[tuple[int, float]]) -> list[tuple[int, float]]:
+    """One candidate per RECORDING before anything is scored — from the scores alone.
+
+    Catalog copies of one recording carry byte-identical audio features, hence identical
+    vectors, hence bit-identical inner products with the seed: they arrive as runs of equal
+    scores. Agúzate held 78 of Chura Ke Dil Mera's 1500 slots that way, the seed's own copies
+    17 more, and only 1147 distinct songs were left to compete. Keeping the first of each equal-
+    score run hands those slots back — with NO database probe. (An ISRC probe on `tracks` did
+    the same job at 300-500 ms per cold pool, because that table's rows are wide and its pages
+    are never warm for a fresh pool; the scores are already in hand.)
+
+    Two DIFFERENT recordings can tie on a float32 score by coincidence — a few per 1500 — and
+    one of them is then dropped. That loses a random 0.5% of the pool, which is harmless;
+    the ISRC/title dedupe at hydration is the ground-truth pass.
+    """
+    out: list[tuple[int, float]] = []
+    last: float | None = None
+    for tid, cos in hits:
+        if cos == last:
+            continue
+        last = cos
+        out.append((tid, cos))
+    return out
+
+
+def _gate(cand: list[tuple[int, float, Any]], masks: dict[int, tuple[int, int]],
+          seed_r: int, seed_s: int, k: int) -> tuple[list[tuple[int, float, Any]], str]:
+    """Cut the pool to candidates that share the seed's region family, then sonic family — each
+    axis independently, each only when the seed has one and >= max(tag_gate_min, 2k) agree.
+
+    A bonus can't do this job: the embedding leaves the intruders interleaved with the real
+    neighbours at cosine gaps of 1e-4, and a 0.05-0.15 additive term only reorders within that
+    noise. Removing them is the only move that makes the top-10 mostly Hindi film music for a
+    Hindi film seed. The floor keeps a seed whose family is thin in its neighbourhood (a Bollywood
+    track surrounded by 30 South Asian tracks and 1470 others) from being cut to 30 and then
+    deduped to 5. Returns the pool and a short tag for the log/response ("region+sonic", "", …).
+    """
+    floor = max(CONFIG.tag_gate_min, 2 * k)
+    applied: list[str] = []
+    for axis, seed_bits in (("region", seed_r), ("sonic", seed_s)):
+        if not seed_bits:
+            continue
+        i = 0 if axis == "region" else 1
+        kept = [c for c in cand if masks.get(c[0], (0, 0))[i] & seed_bits]
+        if len(kept) >= floor:
+            cand = kept
+            applied.append(axis)
+    return cand, "+".join(applied)
+
+
+def _retrieve(index: VectorIndex, emb: np.ndarray, track_id: int) -> list[tuple[int, float]]:
+    """FAISS top-N, collapsed to one hit per recording — widened once if the collapse ate it.
+
+    A mega-hit's own copies fill the pool: Shape of You has 902 catalog copies, so a 1500-wide
+    search collapses to a few hundred distinct recordings and the tag gate has nothing to hold
+    on to. When fewer than half the slots survive, search again 4x wider (still single-digit ms
+    at 10-D), collapse that, and keep the first n survivors. One retry, not a loop: the
+    second pool is bounded and this path only fires for seeds with hundreds of copies.
+    """
+    n = CONFIG.faiss_topk
+    hits = _collapse_copies([(t, s) for t, s in index.search(emb, n) if t != track_id])
+    if len(hits) < n // 2:
+        hits = _collapse_copies([(t, s) for t, s in index.search(emb, 4 * n) if t != track_id])
+    # Cap back to n: the point of widening is n DISTINCT recordings, and every id past this
+    # line costs a cold track_search/track_tags probe (6000 ids measured ~1.2 s on this box).
+    return hits[:n]
+
+
+def find_similar(index: VectorIndex, track_id: int, k: int,
+                 info: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """Top-k similar records. `info`, if given, receives {"gate": "region+sonic"|"region"|"sonic"|"",
+    "pool": <candidates after collapse+gate>} for the response/log."""
     emb = get_embedding(track_id)
     if emb is None:
         return []
-    hits = [(tid, s) for tid, s in index.search(emb, CONFIG.faiss_topk) if tid != track_id]
+    hits = _retrieve(index, emb, track_id)
     if not hits:
         return []
 
@@ -141,9 +220,14 @@ def find_similar(index: VectorIndex, track_id: int, k: int) -> list[dict[str, An
                  for r in db.query(_TAG_SQL.format(ph=db.placeholders(len(ids))), ids)}
     seed_r, seed_s = masks.get(track_id, (0, 0))
 
-    # Normalizing sim is POOL-WIDE (percentiles), so the candidates have to be gathered before
-    # any of them can be scored — hence the two passes over what used to be one loop.
+    # Normalizing sim is POOL-WIDE (percentiles), so the candidates have to be gathered — and
+    # GATED — before any of them can be scored: the percentile ruler must be the gated pool's.
     cand = [(tid, cos, feats[tid]) for tid, cos in hits if tid in feats]
+    gated = ""
+    if _TAGS_ENABLED and CONFIG.tag_gate:
+        cand, gated = _gate(cand, masks, seed_r, seed_s, k)
+    if info is not None:
+        info.update(gate=gated, pool=len(cand))
     if not cand:
         return []
     sims = _normalize_sim(np.array([c for _, c, _ in cand], dtype=np.float64))
@@ -165,14 +249,12 @@ def find_similar(index: VectorIndex, track_id: int, k: int) -> list[dict[str, An
                              + W_REGION*region + W_SONIC*sonic), tid))
 
     scored.sort(reverse=True)
-    # The catalog has many copies of the same song — all genuine nearest neighbours but
-    # useless to show — so dedupe by (title, artists). hydrate_top hydrates in ranked
+    # The score collapse above catches identical-vector copies; the ISRC / folded-title /
+    # artist-overlap dedupe here is the ground-truth pass on the rows being hydrated anyway. hydrate_top hydrates in ranked
     # chunks and stops at k unique records instead of paying the join for k*4 up front.
-    # Pre-seed the dedupe with the SEED's own (title, artists) so copies of the seed track
-    # itself don't come back as "similar" (exact-key; a decoratively-retitled copy can still
-    # slip through — a textnorm-key dedupe would catch those, a documented follow-up).
+    # Pre-seed the dedupe with the SEED's own keys so copies of the seed never come back.
     seed_rec = hydrate.hydrate_one(track_id)
-    exclude = {hydrate.dupe_key(seed_rec)} if seed_rec else None
+    exclude = [seed_rec] if seed_rec else None
     score_by = {tid: s for s, tid in scored}
     records = hydrate.hydrate_top([tid for _, tid in scored], k,
                                   chunk=max(2 * k, 40), exclude=exclude)
