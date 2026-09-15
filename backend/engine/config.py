@@ -76,6 +76,13 @@ class Config:
     # similar._gate also never lets it drop below 2·k. Set 0 to A/B the additive-only blend.
     tag_gate: bool = _env("SONIC_TAG_GATE", "1") not in ("0", "false", "False", "")
     tag_gate_min: int = int(_env("SONIC_TAG_GATE_MIN", "40"))
+    # F6 tag FILTER: retrieve INSIDE the seed's family via a FAISS ID bitmap (engine.bitmaps,
+    # built by backend/build_tag_bitmaps.py). The gate above can only keep what retrieval
+    # returned, and for many Bollywood seeds that is nothing: Tu Jo Mila's pool held 7 South
+    # Asian tracks in 1,195. Filtering the IVF scan draws all 1,500 from the family instead.
+    # Region wins when the seed has one, else sonic. Off (or files absent) → plain search.
+    tag_filter: bool = _env("SONIC_TAG_FILTER", "1") not in ("0", "false", "False", "")
+    bitmap_dir: str = _env("SONIC_BITMAP_DIR", os.path.join(_ROOT, "model_training", "tag_bitmaps"))
     # F1 reshuffle: a seeded "different songs" draw samples within the top-N most popular
     # matches (index-fast pool) — bounds the work so a broad mood query doesn't full-scan/sort.
     reshuffle_pool: int = int(_env("SONIC_RESHUFFLE_POOL", "600"))

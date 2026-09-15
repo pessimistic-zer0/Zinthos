@@ -29,9 +29,19 @@ class VectorIndex:
         n[n == 0] = 1.0
         return v / n
 
-    def search(self, vec: np.ndarray, k: int) -> list[tuple[int, float]]:
-        """Return [(track_id, cosine_score), …] for one already-normalized query vector."""
-        scores, ids = self.index.search(self.normalize(vec), k)
+    def search(self, vec: np.ndarray, k: int, sel: object | None = None) -> list[tuple[int, float]]:
+        """Return [(track_id, cosine_score), …] for one query vector (normalized here).
+
+        `sel` is an optional faiss.IDSelector (engine.bitmaps): the IVF scan then skips every
+        vector outside it, so all k hits come from the selected family. IndexIDMap2 translates
+        the selector to user ids, so the bitmap is over track_ids. Measured 37-74 ms for k=1500
+        at nprobe=64 against ~20 ms unfiltered.
+        """
+        if sel is None:
+            scores, ids = self.index.search(self.normalize(vec), k)
+        else:
+            params = self._faiss.SearchParametersIVF(nprobe=CONFIG.nprobe, sel=sel)
+            scores, ids = self.index.search(self.normalize(vec), k, params=params)
         return [(int(i), float(s)) for i, s in zip(ids[0], scores[0]) if i != -1]
 
     def warmup(self, n: int) -> None:

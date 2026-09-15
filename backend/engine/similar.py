@@ -3,8 +3,9 @@
 Re-rank weights (tuned from the PRD's originals — see the W_* constants below):
     0.50·embedding_sim + 0.10·tempo_prox + 0.15·sonic_family + 0.05·genre_match
   + 0.05·popularity + 0.05·era_prox + 0.10·region_family
-  after (a) collapsing catalog copies (equal-score runs) and (b) GATING the pool to the seed's region/sonic
-  family when enough candidates share it (CONFIG.tag_gate).
+  where retrieval runs INSIDE the seed's family bitmap when one exists (engine.bitmaps,
+  CONFIG.tag_filter), then (a) catalog copies collapse (equal-score runs) and (b) the pool is
+  GATED to the seed's region/sonic family when enough candidates share it (CONFIG.tag_gate).
 The seed's own row + the N candidates are fetched in ONE track_search query (cheap numeric
 work); only the final k are hydrated (expensive joins). N (CONFIG.faiss_topk) is fetched WIDE
 so a mega-hit's own catalog copies don't crowd out genuinely-distinct neighbours.
@@ -22,7 +23,7 @@ from typing import Any
 
 import numpy as np
 
-from . import db, hydrate, tagfamily
+from . import bitmaps, db, hydrate, tagfamily
 from .config import CONFIG
 from .index import VectorIndex
 
@@ -176,8 +177,10 @@ def _gate(cand: list[tuple[int, float, Any]], masks: dict[int, tuple[int, int]],
     return cand, "+".join(applied)
 
 
-def _retrieve(index: VectorIndex, emb: np.ndarray, track_id: int) -> list[tuple[int, float]]:
-    """FAISS top-N, collapsed to one hit per recording — widened once if the collapse ate it.
+def _retrieve(index: VectorIndex, emb: np.ndarray, track_id: int,
+              sel: Any | None = None) -> list[tuple[int, float]]:
+    """FAISS top-N (optionally inside a family bitmap), collapsed to one hit per recording —
+    widened once if the collapse ate it.
 
     A mega-hit's own copies fill the pool: Shape of You has 902 catalog copies, so a 1500-wide
     search collapses to a few hundred distinct recordings and the tag gate has nothing to hold
@@ -186,22 +189,48 @@ def _retrieve(index: VectorIndex, emb: np.ndarray, track_id: int) -> list[tuple[
     second pool is bounded and this path only fires for seeds with hundreds of copies.
     """
     n = CONFIG.faiss_topk
-    hits = _collapse_copies([(t, s) for t, s in index.search(emb, n) if t != track_id])
+    hits = _collapse_copies([(t, s) for t, s in index.search(emb, n, sel) if t != track_id])
     if len(hits) < n // 2:
-        hits = _collapse_copies([(t, s) for t, s in index.search(emb, 4 * n) if t != track_id])
+        hits = _collapse_copies([(t, s) for t, s in index.search(emb, 4 * n, sel) if t != track_id])
     # Cap back to n: the point of widening is n DISTINCT recordings, and every id past this
     # line costs a cold track_search/track_tags probe (6000 ids measured ~1.2 s on this box).
     return hits[:n]
 
 
+def _seed_selector(track_id: int) -> tuple[Any | None, str]:
+    """The bitmap selector for the seed's own family — region if it has one, else sonic.
+
+    Region first because it is the axis the embedding cannot see at all (the 13 features put
+    Tu Jo Mila among Thai pop; they do put Raining Blood among metal). One axis, not the AND:
+    the intersection of two bitmaps can be thin, and the post-gate still applies the other axis
+    when enough candidates carry it. Returns (selector, "region"|"sonic"|"").
+    """
+    if not (bitmaps.ENABLED and _TAGS_ENABLED):
+        return None, ""
+    row = db.query("SELECT region_mask, sonic_mask FROM track_tags WHERE track_id = ?", (track_id,))
+    if not row:
+        return None, ""
+    for axis, mask in (("region", row[0]["region_mask"]), ("sonic", row[0]["sonic_mask"])):
+        sel = bitmaps.selector(axis, mask)
+        if sel is not None:
+            return sel, axis
+    return None, ""
+
+
 def find_similar(index: VectorIndex, track_id: int, k: int,
                  info: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-    """Top-k similar records. `info`, if given, receives {"gate": "region+sonic"|"region"|"sonic"|"",
-    "pool": <candidates after collapse+gate>} for the response/log."""
+    """Top-k similar records. `info`, if given, receives {"filter": "region"|"sonic"|"" (which
+    bitmap retrieval ran inside), "gate": "region+sonic"|"region"|"sonic"|"", "pool": <candidates
+    after collapse+gate>} for the response/log."""
     emb = get_embedding(track_id)
     if emb is None:
         return []
-    hits = _retrieve(index, emb, track_id)
+    sel, filtered = _seed_selector(track_id)
+    hits = _retrieve(index, emb, track_id, sel)
+    if sel is not None and len(hits) < max(CONFIG.tag_gate_min, 2 * k):
+        # Family too thin around this seed for the filtered scan to fill a pool (a tag carried
+        # by a handful of artists): fall back to the plain neighbourhood.
+        hits, filtered = _retrieve(index, emb, track_id), ""
     if not hits:
         return []
 
@@ -227,7 +256,7 @@ def find_similar(index: VectorIndex, track_id: int, k: int,
     if _TAGS_ENABLED and CONFIG.tag_gate:
         cand, gated = _gate(cand, masks, seed_r, seed_s, k)
     if info is not None:
-        info.update(gate=gated, pool=len(cand))
+        info.update(filter=filtered, gate=gated, pool=len(cand))
     if not cand:
         return []
     sims = _normalize_sim(np.array([c for _, c, _ in cand], dtype=np.float64))

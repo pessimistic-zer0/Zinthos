@@ -28,7 +28,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from starlette.requests import Request
 
-from . import artist, hydrate, library, playlist, resolve, search, similar
+from . import artist, bitmaps, hydrate, library, playlist, resolve, search, similar
 from .config import CONFIG
 from .index import VectorIndex
 
@@ -48,6 +48,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # 93.7M stored masks decode to the wrong families with no error anywhere. init_tags() turns
     # the terms off rather than trusting them, and returns the line to log either way.
     print(f"  {similar.init_tags()}")
+    print(f"  {bitmaps.init()}")
     print(f"engine ready: {idx.ntotal:,} vectors mmap'd, warmed in {time.time()-t:.1f}s "
           f"({CONFIG.worker_threads} worker threads)")
     yield
@@ -167,4 +168,5 @@ def search_similar(
     # `norm` echoes the active cosine scaling (SONIC_SIM_NORM) and `gate` which tag axes cut the
     # pool (SONIC_TAG_GATE), so an A/B by ear can't get confused about which ranking it's hearing.
     return {"seed": track_id, "count": len(results), "results": results, "norm": CONFIG.sim_norm,
-            "gate": info.get("gate", ""), "pool": info.get("pool", 0)}
+            "filter": info.get("filter", ""), "gate": info.get("gate", ""),
+            "pool": info.get("pool", 0)}

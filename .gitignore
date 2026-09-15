@@ -46,3 +46,4 @@ PRD_Version2.md
 # === Notebook cruft ===
 *.ipynb_checkpoints
 *.virtual_documents
+model_training/tag_bitmaps/
