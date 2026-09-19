@@ -458,81 +458,116 @@
   color: var(--violet-100);
 }
 
-/* ── 03 · how it is built ───────────────────────────────────────────────────── */
+/* ── 03 · the comparison ─────────────────────────────────────────────────────── */
 .how {
+  position: relative;
   padding-top: clamp(56px, 8vh, 96px);
+  /* She is taller than this section on purpose; the clip is what stops her at the bottom
+     edge instead of letting her run on into the footer. */
+  overflow: hidden;
 }
-/* A rail: one line drawn across, five nodes on it. The line grows in from the left
-   (scaleX), the nodes drop in one after the other. */
-.rail {
-  list-style: none;
+/* Her face, not a silhouette: the artwork itself, turned right down. The source is
+   559x691 and her hood, face and outstretched arms all sit in the upper half of it, so the
+   box is given half the scaled height and the background simply runs past it — a crop, with
+   no second asset to keep in sync. She starts under the last row of figures and fades out
+   before the section ends. */
+.about__raven {
+  position: absolute;
+  right: -2vw;
+  bottom: 0;
+  width: min(32vw, 420px);
+  /* 262 of the source's 691 rows: hood, face, both arms and the orbs, stopping at the belt.
+     Half the image reached up level with the last row of figures; this starts below them. */
+  aspect-ratio: 559 / 262;
+  z-index: 0;
+  pointer-events: none;
+  background-image: url('/assets/raven-hero.png');
+  background-repeat: no-repeat;
+  background-position: top center;
+  background-size: 100% auto;
+  opacity: 0.17;
+  filter: brightness(0.72) saturate(0.85);
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 58%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 0%, #000 58%, transparent 100%);
+  animation: float 11s ease-in-out infinite;
+}
+/* Everything else in the section rides above her. A positioned element paints over plain
+   in-flow blocks, so the content has to be lifted rather than her pushed down. */
+.how > *:not(.about__raven) {
   position: relative;
+  z-index: 1;
+}
+/* Two halves facing each other across one hairline: the size of the problem on the left,
+   the size of the machine on the right. Both columns are pushed up against the rule so the
+   numbers confront each other rather than sitting in separate lists. */
+.gap {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 0 20px;
-  margin-top: clamp(36px, 5vh, 64px);
-  padding-top: 26px;
+  grid-template-columns: 1fr 1fr;
+  margin-top: clamp(26px, 4vh, 44px);
 }
-.rail__line {
-  position: absolute;
-  top: 4px;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, var(--violet-400), rgba(192, 132, 252, 0.25));
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform 1.3s cubic-bezier(0.16, 1, 0.3, 1);
+.gap__side {
+  padding-right: clamp(20px, 3vw, 48px);
+  text-align: right;
 }
-.is-in .rail__line {
-  transform: none;
+.gap__side--machine {
+  padding-right: 0;
+  padding-left: clamp(20px, 3vw, 48px);
+  border-left: 1px solid rgba(168, 85, 247, 0.22);
+  text-align: left;
 }
-.node {
-  position: relative;
-  opacity: 0;
-  transform: translateY(16px);
-  transition: opacity 0.6s ease, transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-  transition-delay: calc(180ms + var(--i, 0) * 130ms);
-}
-.is-in .node {
-  opacity: 1;
-  transform: none;
-}
-.node__dot {
-  position: absolute;
-  top: -26px;
-  left: 0;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--violet-400);
-  box-shadow: 0 0 12px rgba(192, 132, 252, 0.7);
-  translate: 0 -4px;
-}
-/* The last node is Serve — where the pipeline opens onto the rift. It glows magenta. */
-.node:last-child .node__dot {
-  background: var(--magenta);
-  box-shadow: 0 0 12px rgba(255, 42, 157, 0.75);
-}
-.node__n {
-  font-family: var(--font-mono);
+.gap__head {
+  font-family: var(--font-tech);
   font-size: 11px;
-  letter-spacing: 0.16em;
-  color: rgba(192, 132, 252, 0.6);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: rgba(192, 132, 252, 0.7);
 }
-.node__title {
-  margin-top: 10px;
-  font-family: var(--font-heading);
+.gap__rows {
+  margin-top: clamp(16px, 2.4vh, 28px);
+  display: grid;
+  gap: clamp(12px, 1.8vh, 20px);
+}
+.gap__row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  justify-content: flex-start;
+}
+/* On the catalogue side the row runs backwards, so the figure ends up against the rule and
+   its label sits outboard. Both sets of numbers then meet at the line, which is the whole
+   point of putting them side by side. */
+.gap__side:not(.gap__side--machine) .gap__row {
+  flex-direction: row-reverse;
+}
+.gap__v {
+  font-family: var(--font-mono);
   font-weight: 600;
-  font-size: clamp(21px, 1.85vw, 28px);
-  line-height: 1.15;
-  letter-spacing: -0.02em;
+  font-size: clamp(22px, 2.4vw, 38px);
+  line-height: 1;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
   color: var(--violet-100);
 }
-.node__body {
-  margin-top: 10px;
-  font-size: 13px;
-  line-height: 1.65;
+/* The constrained side in the amber the matrix gives its fourth door: at a glance you can
+   see which column is the tight one without reading a single figure. */
+.gap__side--machine .gap__v {
+  color: hsl(30 85% 72%);
+}
+.gap__l {
+  font-family: var(--font-tech);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.gap__coda {
+  max-width: 70ch;
+  margin-top: clamp(30px, 4.5vh, 52px);
+  padding-top: 22px;
+  border-top: 1px solid rgba(255, 255, 255, 0.09);
+  font-size: clamp(15px, 1.1vw, 18px);
+  line-height: 1.75;
   color: var(--text-muted);
 }
 
@@ -636,9 +671,6 @@
 @media (prefers-reduced-motion: reduce) {
   .reveal,
   .line__in,
-  .stat,
-  .node,
-  .rail__line,
   .ticker__item i,
   .mark__l {
     opacity: 1;
@@ -684,27 +716,27 @@
   .way:nth-child(even)::before {
     left: 0;
   }
-  /* The rail stands up: a line down the left, nodes stacked beside it. */
-  .rail {
+  /* The two halves stand up: the rule goes across instead of down, and both columns read
+     left to right like ordinary lists. */
+  .about__raven {
+    width: 56vw;
+    right: -8vw;
+  }
+  .gap {
     grid-template-columns: 1fr;
-    gap: 28px;
-    padding-top: 0;
-    padding-left: 26px;
+    gap: clamp(24px, 4vh, 36px);
   }
-  .rail__line {
-    top: 0;
-    bottom: 0;
-    left: 4px;
-    right: auto;
-    width: 1px;
-    height: auto;
-    background: linear-gradient(180deg, var(--violet-400), rgba(192, 132, 252, 0.25));
-    transform: scaleY(0);
-    transform-origin: top;
+  .gap__side,
+  .gap__side--machine {
+    padding: 0;
+    text-align: left;
+    border-left: none;
   }
-  .node__dot {
-    top: 4px;
-    left: -26px;
-    translate: 0 0;
+  .gap__side--machine {
+    padding-top: clamp(20px, 3vh, 30px);
+    border-top: 1px solid rgba(168, 85, 247, 0.22);
+  }
+  .gap__row {
+    justify-content: flex-start;
   }
 }

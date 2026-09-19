@@ -44,27 +44,17 @@ const TICKER = [
   'search by feel',
 ]
 
-const STEPS = [
-  {
-    title: 'Ingest',
-    body: 'C++ parsers stream 266 GB of source data into one SQLite database under a 16 GB memory ceiling.',
-  },
-  {
-    title: 'Label',
-    body: 'A gradient-boosted model names a genre for 49 million of the 130 million tracks that arrived without one, from audio alone. The rest stay blank rather than guessed.',
-  },
-  {
-    title: 'Embed',
-    body: 'A supervised autoencoder squeezes the features to ten numbers, arranged by how music sounds rather than what it is called.',
-  },
-  {
-    title: 'Index',
-    body: 'A FAISS index over every signature, so the nearest neighbours are a lookup, not a scan of 255 million rows.',
-  },
-  {
-    title: 'Serve',
-    body: 'A FastAPI backend answers in under two seconds. This page is its front door.',
-  },
+/** The two halves of the comparison: what had to be handled, and what it ran on. */
+const SCALE = [
+  ['255,000,000', 'tracks'],
+  ['348,000,000', 'artist links'],
+  ['266 GB', 'of raw source data'],
+]
+
+const MACHINE = [
+  ['15 GB', 'of memory'],
+  ['6 GB', 'of video memory'],
+  ['1', 'laptop'],
 ]
 
 /** A headline split into lines that rise out of a clipped box, one after the other. */
@@ -612,24 +602,47 @@ export default function About() {
           </div>
         </section>
 
-        {/* 03 — how it is built */}
+        {/* 03 — the size of the problem against the size of the machine */}
         <section className="how" aria-labelledby="how-title">
+          {/* Her silhouette in the page's violet, behind the comparison: she came through with
+              you on the matrix screen, and she never really left. Cut off at the section's
+              bottom edge so she does not run down into the footer. */}
+          <div className="about__raven" aria-hidden="true" />
           <p className="chapter reveal">
             <span className="chapter__n chapter__n--chipped">03</span>
-            <span className="chapter__name" id="how-title">How it is built</span>
-            <span className="chapter__note">Five stages, in order</span>
+            <span className="chapter__name" id="how-title">What it had to fit in</span>
+            <span className="chapter__note">The whole project, in one comparison</span>
           </p>
-          <ol className="rail reveal">
-            <span className="rail__line" aria-hidden="true" />
-            {STEPS.map((s, i) => (
-              <li className="node" key={s.title} style={{ '--i': i } as React.CSSProperties}>
-                <span className="node__dot" aria-hidden="true" />
-                <span className="node__n">{String(i + 1).padStart(2, '0')}</span>
-                <h3 className="node__title">{s.title}</h3>
-                <p className="node__body">{s.body}</p>
-              </li>
-            ))}
-          </ol>
+          <div className="gap reveal">
+            <div className="gap__side">
+              <h3 className="gap__head">The catalogue</h3>
+              <dl className="gap__rows">
+                {SCALE.map(([v, label]) => (
+                  <div className="gap__row" key={label}>
+                    <dd className="gap__v">{v}</dd>
+                    <dt className="gap__l">{label}</dt>
+                  </div>
+                ))}
+              </dl>
+            </div>
+            <div className="gap__side gap__side--machine">
+              <h3 className="gap__head">The machine</h3>
+              <dl className="gap__rows">
+                {MACHINE.map(([v, label]) => (
+                  <div className="gap__row" key={label}>
+                    <dd className="gap__v">{v}</dd>
+                    <dt className="gap__l">{label}</dt>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          </div>
+          <p className="gap__coda reveal">
+            Every choice here is the same choice, made over and over: give up something you can
+            measure to stay inside that second column. Hard compression was tried, and the search
+            found one track in three. Smaller rows were tried, and the first load took two and a
+            half hours instead of four minutes. What shipped is what fit.
+          </p>
         </section>
 
         {/* End */}
