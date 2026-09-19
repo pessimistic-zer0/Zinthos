@@ -47,3 +47,11 @@ PRD_Version2.md
 *.ipynb_checkpoints
 *.virtual_documents
 model_training/tag_bitmaps/
+
+LLM_PRD.md
+project_details.md
+backend/implementation_plan.md
+backend/local_library.md
+backend/test_llm.py
+model_training/F6_design_decisions.md
+model_training/F6_implementation_plan.md
