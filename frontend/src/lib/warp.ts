@@ -7,6 +7,7 @@
  */
 
 const FALLBACK_MS = 950
+const CLOSE_FALLBACK_MS = 760
 
 /** Parse a CSS time token ("1250ms" / "1.25s") into milliseconds. */
 export function parseCssTime(value: string): number | null {
@@ -22,10 +23,19 @@ export function parseCssTime(value: string): number | null {
   return null
 }
 
+function cssTimeMs(name: string, fallback: number): number {
+  if (typeof window === 'undefined') return fallback
+  const raw = getComputedStyle(document.documentElement).getPropertyValue(name)
+  return parseCssTime(raw) ?? fallback
+}
+
 export function warpDurationMs(): number {
-  if (typeof window === 'undefined') return FALLBACK_MS
-  const raw = getComputedStyle(document.documentElement).getPropertyValue('--warp-duration')
-  return parseCssTime(raw) ?? FALLBACK_MS
+  return cssTimeMs('--warp-duration', FALLBACK_MS)
+}
+
+/** How long the tear takes to seal on the way back out. */
+export function riftCloseMs(): number {
+  return cssTimeMs('--rift-close-duration', CLOSE_FALLBACK_MS)
 }
 
 export function prefersReducedMotion(): boolean {

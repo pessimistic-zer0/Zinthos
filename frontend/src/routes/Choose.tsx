@@ -9,12 +9,14 @@ import '../styles/choose.css'
 interface Props {
   /** True while the rift is still opening onto this screen. */
   holding: boolean
+  /** True while it is sealing again and this screen is being clipped away. */
+  closing: boolean
   /** The crack being opened; null when #/choose was opened directly. */
   origin: WarpOrigin | null
   onBack: () => void
 }
 
-export default function Choose({ holding, origin, onBack }: Props) {
+export default function Choose({ holding, closing, origin, onBack }: Props) {
   const [selected, setSelected] = useState<ModeKind | null>(null)
   const [open, setOpen] = useState(false)
   /** Where the console swoops in from: the clicked card's centre, relative to the viewport centre. */
@@ -61,7 +63,7 @@ export default function Choose({ holding, origin, onBack }: Props) {
   return (
     <div
       ref={host}
-      className={`choose${viaWarp ? ' is-warp-arrival' : ''}${holding ? ' is-holding' : ''}`}
+      className={`choose${viaWarp ? ' is-warp-arrival' : ''}${holding ? ' is-holding' : ''}${closing ? ' is-closing' : ''}`}
       style={
         origin
           ? ({ '--warp-x': `${origin.x}px`, '--warp-y': `${origin.y}px` } as React.CSSProperties)
@@ -80,10 +82,6 @@ export default function Choose({ holding, origin, onBack }: Props) {
       <ChooseBackdrop origin={origin} host={host} />
 
       <header className="choose__nav">
-        <span className="hud-pill">
-          <span className="pulse-dot" />
-          Decision Matrix // Select 1 of 4
-        </span>
         <div className="choose__nav-actions">
           <button type="button" className="ghost-btn" onClick={onBack}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -147,13 +145,9 @@ export default function Choose({ holding, origin, onBack }: Props) {
             <b>Click</b> Select &amp; open console
           </span>
           <span>
-            <b>Hover</b> Preview focus
-          </span>
-          <span>
             <b>Esc</b> Close / back
           </span>
         </div>
-        <span className="choose__sig">Zinthos Matrix // 4-Way Selection</span>
       </footer>
 
       {active && open && <QueryModal mode={active} from={from} onClose={close} />}

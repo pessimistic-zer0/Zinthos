@@ -89,6 +89,22 @@
   clip-path: none;
 }
 
+/* Sealing. The same clip from the same canvas, run backwards. The screen has to climb back
+   over the landing, which is z-index 50 and now mounted at rest underneath: the hole shrinks off a home screen that is simply standing there, with
+   none of the dolly or drag the way in needed. Nothing here re-runs those: `matrix-approach`
+   and `chrome-arrive` are `both`/`forwards` and finished long ago.
+
+   Both selectors, and the arrival one spelled out: `:not(.is-holding)` above counts its
+   argument, so that rule is three classes deep and a bare `.choose.is-closing` would lose
+   the clip to it. This ties it and comes later. */
+.choose.is-closing,
+.choose.is-warp-arrival.is-closing {
+  z-index: 55;
+  clip-path: var(--rift-clip, none);
+  /* Committed: no clicking through a screen that is already half gone. */
+  pointer-events: none;
+}
+
 /* Seen through the hole, the matrix settles from a slight overscale into place — one
    continuous approach across both screens. Ends at scale 1, the resting state, so nothing
    jumps when the phase flips. Transform and opacity only: this runs while the landing is
@@ -204,29 +220,7 @@
   gap: 10px;
 }
 
-.ghost-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  white-space: nowrap;
-  padding: 7px 14px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.04);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  color: var(--text-muted);
-  transition:
-    background 0.2s ease,
-    border-color 0.2s ease,
-    color 0.2s ease;
-}
-.ghost-btn:hover {
-  background: rgba(168, 85, 247, 0.16);
-  border-color: var(--line-strong);
-  color: #fff;
-}
+/* .ghost-btn lives in global.css: the about page's back button uses it too. */
 
 /* ── Centre HUD ────────────────────────────────────────────────────────────── */
 .choose__hud {

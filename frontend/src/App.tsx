@@ -4,7 +4,7 @@ import Choose from './routes/Choose'
 import About from './routes/About'
 import RiftReveal from './components/RiftReveal'
 import type { RiftGeometry } from './lib/rift'
-import { prefersReducedMotion, warpDurationMs } from './lib/warp'
+import { prefersReducedMotion, riftCloseMs, warpDurationMs } from './lib/warp'
 import './styles/global.css'
 
 /**
@@ -12,7 +12,7 @@ import './styles/global.css'
  * card reveal, and a navigation mid-animation would tear it. The hash still changes so the
  * back button and a pasted #/choose link both behave.
  */
-export type Phase = 'landing' | 'warp' | 'choose'
+export type Phase = 'landing' | 'warp' | 'choose' | 'close'
 
 /** Raven's on-screen box at the click, so the reveal can pick her up exactly where she was. */
 export interface FigureSnapshot {
@@ -76,10 +76,30 @@ export default function App() {
     }, warpDurationMs())
   }, [])
 
+  /**
+   * Back out the way you came in: the same tear, sealing. Only the tear, though — the way
+   * in also dollies the matrix in and drags the landing along, and replaying either
+   * backwards would put a second of zoom between the click and the home screen. So the
+   * landing simply mounts at rest behind the hole and the hole shrinks off it.
+   *
+   * Needs the geometry of the crack you arrived through. Without it — #/choose opened
+   * directly, or reduced motion — there is nothing to close, so it is still a cut.
+   */
   const exit = useCallback(() => {
-    window.location.hash = ''
-    setPhase('landing')
-  }, [])
+    if (timer.current !== null) return // already sealing
+    if (!origin || prefersReducedMotion()) {
+      window.location.hash = ''
+      setPhase('landing')
+      return
+    }
+
+    setPhase('close')
+    timer.current = window.setTimeout(() => {
+      timer.current = null
+      window.location.hash = ''
+      setPhase('landing')
+    }, riftCloseMs())
+  }, [origin])
 
   return (
     <>
@@ -90,9 +110,15 @@ export default function App() {
           are fixed screens and must not be scrolled out from under the rift. */}
       {phase === 'landing' && <About />}
       {phase !== 'landing' && (
-        <Choose holding={phase === 'warp'} origin={origin} onBack={exit} />
+        <Choose
+          holding={phase === 'warp'}
+          closing={phase === 'close'}
+          origin={origin}
+          onBack={exit}
+        />
       )}
       {phase === 'warp' && origin && <RiftReveal origin={origin} />}
+      {phase === 'close' && origin && <RiftReveal origin={origin} mode="close" />}
     </>
   )
 }

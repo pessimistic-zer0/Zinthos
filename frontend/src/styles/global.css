@@ -43,6 +43,12 @@
      RiftReveal, so the clip and the edge light share one clock. */
   --warp-duration: 1350ms;
 
+  /* Coming back out. The same tear, run backwards — but only the tear: the way in also
+     dollies the matrix in and drags the landing along, and neither has a reverse worth
+     watching on the way out. With nothing to wait for but the hole itself, the opening's
+     1350ms reads as a stall, so the exit gets its own, shorter clock. */
+  --rift-close-duration: 760ms;
+
   color-scheme: dark;
 }
 

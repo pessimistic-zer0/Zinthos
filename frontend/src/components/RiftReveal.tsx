@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { WarpOrigin } from '../App'
-import { warpDurationMs } from '../lib/warp'
+import { riftCloseMs, warpDurationMs } from '../lib/warp'
 import {
   BRANCHES,
   branchPoints,
@@ -43,8 +43,22 @@ interface Debris {
  *
  * One clock drives clip, light and Raven. A CSS keyframe for the clip and a rAF loop for
  * the light start a frame apart, and at peak the edge moves thousands of px/s.
+ *
+ * `mode="close"` runs the whole thing backwards for the way out: the clock still counts
+ * 0 to 1, but every stage reads `1 - t`, so the hole shrinks down the same curve it grew
+ * along, the rim lights up as it tightens, the debris streaks back out and the seam's
+ * hairlines return at the end. Both ends stay continuous by construction — the first
+ * frame of the close is the last frame of the open, and the last is the idle seam the
+ * landing draws for itself. Raven is the one exception: she is standing in the DOM behind
+ * the hole the whole way out, so painting her here too would double her.
  */
-export default function RiftReveal({ origin }: { origin: WarpOrigin }) {
+export default function RiftReveal({
+  origin,
+  mode = 'open',
+}: {
+  origin: WarpOrigin
+  mode?: 'open' | 'close'
+}) {
   const ref = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
@@ -53,7 +67,8 @@ export default function RiftReveal({ origin }: { origin: WarpOrigin }) {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    const duration = warpDurationMs()
+    const closing = mode === 'close'
+    const duration = closing ? riftCloseMs() : warpDurationMs()
     const root = document.documentElement
     let w = 0
     let h = 0
@@ -128,7 +143,9 @@ export default function RiftReveal({ origin }: { origin: WarpOrigin }) {
 
     const render = (now: number) => {
       const t = Math.min((now - start) / duration, 1)
-      const k = openingAt(t)
+      // Where on the opening's timeline this frame sits. Closing walks it in reverse.
+      const p = closing ? 1 - t : t
+      const k = openingAt(p)
       const pts = riftPolygon(origin, k, reach)
       root.style.setProperty('--rift-clip', polygonToClip(pts))
 
@@ -137,12 +154,12 @@ export default function RiftReveal({ origin }: { origin: WarpOrigin }) {
       ctx.lineCap = 'round'
       ctx.lineJoin = 'round'
       const { x, y } = origin
-      const strength = t < 0.9 ? 1 : 1 - (t - 0.9) / 0.1
+      const strength = p < 0.9 ? 1 : 1 - (p - 0.9) / 0.1
 
       // ── The wall gives: a dim pulse from the seam as the tear starts to move ───────
-      if (t < 0.35) {
-        const f = Math.pow(1 - t / 0.35, 1.5)
-        const fr = 40 + t * 700
+      if (p < 0.35) {
+        const f = Math.pow(1 - p / 0.35, 1.5)
+        const fr = 40 + p * 700
         const flash = ctx.createRadialGradient(x, y, 0, x, y, fr)
         flash.addColorStop(0, `rgba(233, 213, 255, ${(0.3 * f).toFixed(3)})`)
         flash.addColorStop(0.3, `rgba(192, 132, 252, ${(0.12 * f).toFixed(3)})`)
@@ -152,8 +169,8 @@ export default function RiftReveal({ origin }: { origin: WarpOrigin }) {
       }
 
       // ── Branches: the hairlines die as the main tear takes everything ───────────────
-      if (t < 0.3) {
-        const a = 1 - t / 0.3
+      if (p < 0.3) {
+        const a = 1 - p / 0.3
         for (const b of BRANCHES) {
           tracePath(ctx, branchPoints(origin, b), false)
           ctx.lineWidth = 0.9
@@ -175,22 +192,22 @@ export default function RiftReveal({ origin }: { origin: WarpOrigin }) {
       ctx.stroke()
 
       // ── Raven, in front of the tear until it takes her ──────────────────────────────
-      drawRaven(t)
+      if (!closing) drawRaven(p)
 
       // ── Debris falling in ───────────────────────────────────────────────────────────
       // Each streak accelerates toward the crack and stretches as it goes; the direction
       // of travel is what sells the pull.
       for (const d of debris) {
-        const p = (t - d.delay) / 0.4
-        if (p <= 0 || p >= 1) continue
-        const e = p * p * p
+        const q = (p - d.delay) / 0.4
+        if (q <= 0 || q >= 1) continue
+        const e = q * q * q
         const dist = d.from * reach * (1 - e)
         const cx = x + Math.cos(d.angle) * dist
         const cy = y + Math.sin(d.angle) * dist
-        const len = 6 + 90 * p * p
+        const len = 6 + 90 * q * q
         const tx = x + Math.cos(d.angle) * Math.max(0, dist - len)
         const ty = y + Math.sin(d.angle) * Math.max(0, dist - len)
-        const a = 0.75 * (1 - e) * Math.min(1, p * 8)
+        const a = 0.75 * (1 - e) * Math.min(1, q * 8)
         ctx.lineWidth = d.width
         ctx.strokeStyle = `rgba(233, 213, 255, ${a.toFixed(3)})`
         ctx.beginPath()
@@ -209,7 +226,7 @@ export default function RiftReveal({ origin }: { origin: WarpOrigin }) {
       window.removeEventListener('resize', resize)
       root.style.removeProperty('--rift-clip')
     }
-  }, [origin])
+  }, [origin, mode])
 
   return <canvas className="rift-reveal" ref={ref} aria-hidden="true" />
 }
