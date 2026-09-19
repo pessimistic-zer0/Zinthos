@@ -24,7 +24,11 @@
   --line: rgba(168, 85, 247, 0.22);
   --line-strong: rgba(168, 85, 247, 0.45);
 
+  /* Bodoni is a didone: below ~50px its hairlines go sub-pixel and drop out, which on this
+     background turns a 4 into a 1. Display sizes only (hero, the giant numerals, the mark);
+     anything at heading size or smaller reaches for --font-heading or --font-mono. */
   --font-display: 'Bodoni Moda', 'Playfair Display', serif;
+  --font-heading: 'Space Grotesk', system-ui, sans-serif;
   --font-body: 'Manrope', system-ui, sans-serif;
   --font-tech: 'Space Grotesk', ui-monospace, monospace;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
@@ -158,6 +162,31 @@ button {
   white-space: nowrap;
 }
 
+/* The quiet action button: used by the matrix's back button and the about page's return
+to the rift. */
+.ghost-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+.ghost-btn:hover {
+  background: rgba(168, 85, 247, 0.16);
+  border-color: var(--line-strong);
+  color: #fff;
+}
 .pulse-dot {
   position: relative;
   width: 8px;

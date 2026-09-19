@@ -16,22 +16,45 @@
      makes this a scroll container that scrollIntoView and find-in-page can shift. */
   overflow: clip;
 }
-/* The top edge is a rim like the shield's: a hairline that is brightest at the centre. */
+/* The top edge is a rim like the shield's: a hairline that is brightest at the centre,
+   bleeding into the magenta the rift threw as you came through. */
 .about__edge {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(216, 180, 254, 0.55) 50%, transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(216, 180, 254, 0.55) 38%,
+    rgba(255, 42, 157, 0.5) 50%,
+    rgba(216, 180, 254, 0.55) 62%,
+    transparent
+  );
 }
 .about__edge::after {
   content: '';
   position: absolute;
   inset: 0 0 auto 0;
   height: 140px;
-  background: linear-gradient(180deg, rgba(168, 85, 247, 0.07), transparent);
+  background: linear-gradient(180deg, rgba(168, 85, 247, 0.07), rgba(255, 42, 157, 0.02) 60%, transparent);
   pointer-events: none;
+}
+
+/* The sky, continued. Fixed so it stays still while the page slides over the landing;
+   negative z-index keeps the copy in front. It fades in only while part of the page is
+   showing, so scrolling back up returns to the landing untouched. */
+.about__stars {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 0.8s ease;
+  pointer-events: none;
+}
+.about__stars.is-visible {
+  opacity: 1;
 }
 /* One soft light behind the opening, painted once. */
 .about__glow {
@@ -69,19 +92,43 @@
   font-family: var(--font-mono);
   color: var(--violet-200);
 }
+/* Same damage language as the ZIN/HOS wordmark: a corner sheared off the numeral. */
+.chapter__n--chipped {
+  clip-path: polygon(0 0, 100% 0, 100% 72%, 76% 100%, 0 100%);
+}
 .chapter__note {
   margin-left: auto;
   color: rgba(152, 141, 159, 0.6);
   letter-spacing: 0.16em;
   text-align: right;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: color 0.3s ease;
+}
+.chapter__note.is-paused {
+  color: var(--violet-300);
+}
+.chapter__note-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--magenta);
+  box-shadow: 0 0 6px var(--magenta);
 }
 
 /* ── 00 · the claim ─────────────────────────────────────────────────────────── */
 .opening {
+  min-height: calc(100vh - clamp(64px, 9vh, 112px));
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
   padding-bottom: clamp(48px, 7vh, 88px);
+  box-sizing: border-box;
 }
 .opening__title {
-  margin-top: clamp(28px, 4vh, 48px);
+  margin: auto 0;
+  padding: clamp(20px, 3vh, 40px) 0;
   font-family: var(--font-display);
   font-weight: 800;
   font-size: clamp(60px, 11.5vw, 190px);
@@ -117,7 +164,36 @@
 .opening__row {
   display: grid;
   grid-template-columns: 1fr minmax(0, 52ch);
-  margin-top: clamp(28px, 4vh, 44px);
+  margin-top: 0;
+  align-items: flex-end;
+}
+.opening__indicator {
+  grid-column: 1;
+  display: flex;
+  align-items: center;
+  padding-bottom: 4px;
+}
+/* Built on the shared .hud-pill; only the state colour is local. */
+.opening__badge {
+  background: rgba(27, 18, 40, 0.85);
+  color: var(--violet-300);
+  transition: opacity 0.4s ease, border-color 0.4s ease, color 0.4s ease;
+}
+.opening__badge.is-ready {
+  color: var(--violet-200);
+  border-color: rgba(168, 85, 247, 0.45);
+  box-shadow: 0 0 15px rgba(168, 85, 247, 0.15);
+}
+.opening__badge.is-ready svg {
+  animation: bounce-subtle 1.6s ease-in-out infinite;
+}
+@keyframes bounce-subtle {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(3px);
+  }
 }
 .opening__lead {
   grid-column: 2;
@@ -165,6 +241,22 @@
   height: 5px;
   rotate: 45deg;
   background: var(--violet-500);
+  animation: ticker-glint 1.8s ease-in-out infinite;
+}
+/* Every third diamond is rift-magenta, breathing on the same 1.8s clock as the pulse dot. */
+.ticker__set .ticker__item:nth-child(3n) i {
+  background: var(--magenta);
+}
+@keyframes ticker-glint {
+  0%,
+  100% {
+    box-shadow: 0 0 0 rgba(168, 85, 247, 0);
+    opacity: 0.75;
+  }
+  50% {
+    box-shadow: 0 0 8px currentColor;
+    opacity: 1;
+  }
 }
 /* Two identical sets, shifted by exactly one: the loop never shows a seam. */
 @keyframes ticker {
@@ -177,9 +269,11 @@
 .ways {
   padding-top: clamp(56px, 8vh, 96px);
 }
+/* 2x2, mirroring the corner matrix on the choose screen: the same four doors in the same
+   arrangement, so the two pages describe one shape. */
 .ways__grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   margin-top: 8px;
 }
 .way {
@@ -187,7 +281,7 @@
   padding: clamp(28px, 4vw, 52px) clamp(18px, 2.2vw, 32px) clamp(32px, 4vw, 56px) 0;
   overflow: hidden;
 }
-.way + .way {
+.way:nth-child(even) {
   padding-left: clamp(18px, 2.2vw, 32px);
   border-left: 1px solid rgba(168, 85, 247, 0.14);
 }
@@ -204,7 +298,7 @@
   transform-origin: left;
   transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.way + .way::before {
+.way:nth-child(even)::before {
   left: clamp(18px, 2.2vw, 32px);
 }
 .way:hover::before {
@@ -229,11 +323,11 @@
 }
 .way__title {
   margin-top: 26px;
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: clamp(24px, 2.2vw, 34px);
-  line-height: 1.05;
-  letter-spacing: -0.015em;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: clamp(23px, 2.05vw, 32px);
+  line-height: 1.12;
+  letter-spacing: -0.02em;
   color: var(--violet-100);
 }
 .way__body {
@@ -241,71 +335,127 @@
   font-size: 14px;
   line-height: 1.7;
   color: var(--text-muted);
-  max-width: 34ch;
+  /* The cap is a reading measure, not a layout device: at two columns the card is wide
+     enough that 34ch left the right half of it empty. */
+  max-width: 44ch;
 }
 
 /* ── 02 · by the numbers ────────────────────────────────────────────────────── */
 .numbers {
+  position: relative;
   padding-top: clamp(56px, 8vh, 96px);
 }
-.big {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px 32px;
+/* The figure sits behind the sentence rather than beside it: one absolutely positioned
+   layer pinned to the right, the paragraph in flow on top of it. */
+.numbers__body {
+  position: relative;
   margin-top: clamp(20px, 3vh, 36px);
 }
-.big__value {
+.big {
+  position: absolute;
+  /* Centred on the paragraph and left to take its own height. It must NOT be clipped to the
+     paragraph's box: `background-clip: text` paints the gradient only across this element's
+     own background area, so any glyph hanging outside it comes out transparent — the bleed
+     would be sliced flat instead of overhanging. */
+  top: 0;
+  bottom: 0;
+  /* Sat outboard of the text column so the figure reads as its own layer rather than as the
+     paragraph's right margin. */
+  right: clamp(-34px, -1.8vw, -12px);
+  margin: 0;
+  /* Centred by flexbox, never by a transform: this element also carries `.reveal`, whose
+     own transform would win the cascade and drop the centring on the floor. */
+  display: flex;
+  align-items: center;
+  /* It is scenery: never takes a click, never eats a text selection. */
+  pointer-events: none;
+  z-index: 0;
+}
+/* Three groups of three, one per line, centred on the paragraph's own height. A stack this
+   shape is always about 1.4x taller than it is wide, so sizing it to fit the height exactly
+   would leave it too narrow to reach the prose at all; it is sized to overlap instead and
+   allowed to bleed a little above and below, the way a watermark should. */
+/* The row is what gets centred on the paragraph; inside it the unit hangs from the same
+   top edge as the first group of digits. */
+.big__figure {
+  display: flex;
+  align-items: flex-start;
+}
+.big__stack {
+  display: flex;
+  flex-direction: column;
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: clamp(54px, 10.4vw, 168px);
-  line-height: 0.9;
+  font-size: clamp(56px, 9.8vw, 140px);
+  line-height: 0.8;
   letter-spacing: -0.045em;
-  color: var(--violet-200);
+  text-align: right;
   font-variant-numeric: tabular-nums;
-  margin-left: -0.03em;
+  /* Transparent where the sentence crosses it, full strength out in the clear margin. The
+     gradient is painted through the glyphs themselves, so the fade is on the digits and
+     not on a box behind them. */
+  background-image: linear-gradient(
+    90deg,
+    rgba(222, 196, 247, 0.12) 0%,
+    rgba(222, 196, 247, 0.3) 42%,
+    rgba(222, 196, 247, 0.58) 72%,
+    var(--violet-200) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
-.big__label {
+.big__group {
+  display: block;
+}
+/* The unit runs down the outer edge, one letter per line — the brightest end of the figure,
+   so it stays a caption rather than joining the fade. */
+.big__word {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-left: clamp(10px, 0.9vw, 18px);
+  /* Bodoni's cap height sits below the top of its own line box at this leading; the nudge
+     puts the T level with the top of the 2 rather than with the box around it. */
+  margin-top: 0.12em;
   font-family: var(--font-tech);
   font-size: 12px;
-  letter-spacing: 0.22em;
+  line-height: 1.85;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: rgba(192, 132, 252, 0.7);
+  color: rgba(222, 196, 247, 0.75);
 }
-.stats {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0 24px;
-  margin-top: clamp(28px, 4vh, 48px);
+.big__letter {
+  display: block;
 }
-.stat {
-  padding-top: 18px;
-  border-top: 1px solid rgba(255, 255, 255, 0.09);
-  /* Each column arrives a beat after the last. */
-  opacity: 0;
-  transform: translateY(14px);
-  transition: opacity 0.7s ease, transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
-  transition-delay: calc(140ms + var(--i, 0) * 90ms);
+
+.figures {
+  position: relative;
+  z-index: 1;
+  /* Wider than a pure reading measure would ask for, so the long lines run into the figure
+     behind them — the overlap is what makes it read as two layers rather than two columns. */
+  max-width: 74ch;
+  font-size: clamp(16px, 1.25vw, 20px);
+  line-height: 1.75;
+  color: var(--text-muted);
 }
-.is-in .stat {
-  opacity: 1;
-  transform: none;
+.figures em {
+  font-style: italic;
+  color: var(--violet-200);
 }
-.stat__value {
+.fig {
   font-family: var(--font-display);
-  font-weight: 700;
-  font-size: clamp(30px, 3.6vw, 56px);
+  font-size: 1.3em;
+  /* Bodoni ships an optical-size axis, and `auto` would hand 26px the near-text cut whose
+     hairlines still go faint on this background. Pinned to the small-text design instead:
+     the thins are drawn thicker there, so the 4 keeps its crossbar. */
+  font-optical-sizing: none;
+  font-variation-settings: 'opsz' 8, 'wght' 600;
+  /* Held to the prose leading: at 1.3em the serif would otherwise open the line it sits on. */
   line-height: 1;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.01em;
+  padding: 0 0.03em;
   color: var(--violet-100);
-}
-.stat__label {
-  margin-top: 10px;
-  font-family: var(--font-tech);
-  font-size: 11px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--text-faint);
 }
 
 /* ── 03 · how it is built ───────────────────────────────────────────────────── */
@@ -359,6 +509,11 @@
   box-shadow: 0 0 12px rgba(192, 132, 252, 0.7);
   translate: 0 -4px;
 }
+/* The last node is Serve — where the pipeline opens onto the rift. It glows magenta. */
+.node:last-child .node__dot {
+  background: var(--magenta);
+  box-shadow: 0 0 12px rgba(255, 42, 157, 0.75);
+}
 .node__n {
   font-family: var(--font-mono);
   font-size: 11px;
@@ -367,10 +522,11 @@
 }
 .node__title {
   margin-top: 10px;
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: clamp(22px, 2vw, 30px);
-  letter-spacing: -0.015em;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: clamp(21px, 1.85vw, 28px);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
   color: var(--violet-100);
 }
 .node__body {
@@ -399,25 +555,24 @@
   font-style: italic;
   color: var(--violet-300);
 }
+/* The shared .ghost-btn does the chrome; this only pushes it into the page's voice. */
 .end__back {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
   padding: 11px 18px;
-  border-radius: 999px;
-  border: 1px solid var(--line-strong);
-  background: transparent;
-  color: var(--violet-200);
-  font-family: var(--font-tech);
-  font-size: 11.5px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  cursor: pointer;
-  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.3s;
+  color: var(--violet-200);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 .end__back:hover {
   transform: translateY(-2px);
-  background: rgba(168, 85, 247, 0.12);
+}
+/* Same monospaced sign-off as the matrix's footer. */
+.about__sig {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
 }
 
 /* The name, complete, running off the bottom of the page. Hollow like the far half of the
@@ -484,6 +639,7 @@
   .stat,
   .node,
   .rail__line,
+  .ticker__item i,
   .mark__l {
     opacity: 1;
     transform: none;
@@ -492,8 +648,18 @@
 }
 
 @media (max-width: 900px) {
+  .opening {
+    min-height: auto;
+    padding-bottom: clamp(48px, 7vh, 88px);
+  }
+  .opening__title {
+    margin: clamp(28px, 4vh, 48px) 0;
+  }
   .opening__row {
     grid-template-columns: 1fr;
+  }
+  .opening__indicator {
+    display: none;
   }
   .opening__lead {
     grid-column: 1;
@@ -501,21 +667,22 @@
   .chapter__note {
     display: none;
   }
+  .about__sig {
+    display: none;
+  }
   .ways__grid {
     grid-template-columns: 1fr;
   }
   .way,
-  .way + .way {
+  .way + .way,
+  .way:nth-child(even) {
     padding-left: 0;
     border-left: none;
     border-top: 1px solid rgba(168, 85, 247, 0.14);
   }
-  .way + .way::before {
+  .way + .way::before,
+  .way:nth-child(even)::before {
     left: 0;
-  }
-  .stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 20px 20px;
   }
   /* The rail stands up: a line down the left, nodes stacked beside it. */
   .rail {
