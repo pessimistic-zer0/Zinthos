@@ -65,8 +65,6 @@ The underlying data is third-party and is **never redistributed here**: the buil
 - **Embeddings (supervised autoencoder):** compresses 13 features → a 10-D bottleneck with a dual-head loss (reconstruction MSE + genre cross-entropy) so same-genre tracks cluster together.
 - **Vector search (FAISS):** `IndexIVFPQ`, `nlist=16000`, 10 sub-quantizers — nearest-neighbour similarity in <100 ms.
 
-See [`LLM_PRD.md`](LLM_PRD.md) for the full feature spec.
-
 ### Results
 
 Evaluation artifacts from the genre classifier and the supervised autoencoder (full-resolution PNGs in [`model_training/`](model_training/)):
