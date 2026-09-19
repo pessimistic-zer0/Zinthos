@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..900;1,6..96,400..900&amp;family=Cinzel:wght@600;700;800;900&amp;family=Manrope:wght@300;400;500;600;700&amp;family=Space+Grotesk:wght@400;500;600;700&amp;family=Playfair+Display:ital,wght@0,700;0,900;1,700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+@layer base {
+  html, body {
+    margin: 0;
+    padding: 0;
+    background-color: #0d0814;
+    overflow: hidden;
+  }
+}
+::-webkit-scrollbar { display: none; }
+@keyframes etherealFloat {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-14px);
+  }
+}
+@keyframes etherealShadow {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(0.82);
+    opacity: 0.25;
+  }
+}
+.float-animate {
+  animation: etherealFloat 6s ease-in-out infinite;
+}
+.shadow-animate {
+  animation: etherealShadow 6s ease-in-out infinite;
+}
+#constellation-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 5;
+}
+</style>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+tailwind.config = {
+  darkMode: "class",
+  theme: {
+    extend: {
+      colors: {
+        "on-surface": "#e7e0ef",
+        "on-surface-variant": "#cfc2d6",
+        "outline": "#988d9f",
+        "outline-variant": "#4d4354",
+        "background": "#0c0814",
+        "surface": "#0d0814",
+        "primary": "#ddb7ff",
+        "secondary": "#ff2a9d",
+        "tertiary": "#c0c1ff"
+      },
+      fontFamily: {
+        "display": ["Bodoni Moda", "Playfair Display", "serif"],
+        "cinzel": ["Cinzel", "serif"],
+        "body": ["Manrope", "sans-serif"],
+        "mono-tech": ["Space Grotesk", "monospace"]
+      }
+    }
+  }
+}
+</script>
+</head>
+<body class="bg-[#0c0814] font-body text-on-surface antialiased selection:bg-purple-600 selection:text-white min-h-screen w-screen relative overflow-hidden flex flex-col justify-between p-2.5 sm:p-4 select-none">
+<!-- Ambient Glow Effects and Cosmic Background -->
+<div class="fixed inset-0 pointer-events-none z-0">
+<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[750px] h-[750px] rounded-full bg-[radial-gradient(circle,rgba(168,85,247,0.22)_0%,rgba(92,26,160,0.14)_45%,transparent_70%)] blur-2xl"></div>
+<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[420px] h-[420px] rounded-full bg-[radial-gradient(circle,rgba(224,93,255,0.18)_0%,transparent_65%)] blur-xl"></div>
+<!-- Fine technical radial lines -->
+<div class="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_40%,rgba(10,6,17,0.85)_100%)]"></div>
+</div>
+<!-- Interactive Constellation Particle Canvas -->
+<canvas id="constellation-canvas"></canvas>
+<!-- Outer Technical HUD Frame (Border & Indexing) -->
+<div class="relative z-10 w-full h-full min-h-[calc(100vh-1.5rem)] sm:min-h-[calc(100vh-2rem)] border border-purple-900/35 rounded-xl flex flex-col justify-between p-4 sm:p-6 lg:p-7 backdrop-blur-[1px]">
+<!-- Outer Frame Top Label: 01 LANDING / ARRIVAL -->
+<div class="absolute -top-3 left-6 px-2 bg-[#0c0814] flex items-center space-x-2 text-xs font-mono-tech tracking-[0.2em] text-purple-200/70 uppercase">
+<span class="font-bold text-white tracking-widest">01</span>
+<span class="text-purple-300/60">LANDING / ARRIVAL</span>
+</div>
+<!-- Outer Frame Bottom Label: 03 VIBE SEARCH -->
+<div class="absolute -bottom-3 left-6 px-2 bg-[#0c0814] flex items-center space-x-2 text-xs font-mono-tech tracking-[0.2em] text-purple-300/60 uppercase">
+<span class="font-bold text-white tracking-widest">03</span>
+<span class="text-purple-300/50">VIBE SEARCH</span>
+</div>
+<!-- 1. TOP HEADER HUD / NAVIGATION -->
+<header class="w-full flex items-center justify-between pt-1 z-30">
+<!-- Top Left Pill: 255,000,000+ TRACKS -->
+<div class="flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-[#1b1228]/80 border border-purple-500/30 shadow-[0_0_15px_rgba(168,85,247,0.15)]">
+<span class="relative flex h-2 w-2">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#e6007e] opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2 w-2 bg-[#ff2a9d]"></span>
+</span>
+<span class="font-mono-tech text-[11px] sm:text-xs text-purple-100/90 font-medium tracking-wider uppercase">255,000,000+ TRACKS</span>
+</div>
+<!-- Top Center Pill: A DIFFERENT WAY TO LISTEN -->
+<div class="hidden md:flex items-center px-4 py-1.5 rounded-full bg-[#170f22]/70 border border-purple-500/20">
+<span class="font-mono-tech text-[11px] sm:text-xs text-purple-200/70 tracking-[0.18em] uppercase">A DIFFERENT WAY TO LISTEN</span>
+</div>
+<!-- Top Right Pill: PORTAL MODE: OMEGA-VII -->
+<div class="flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-[#1b1228]/80 border border-purple-500/30 shadow-[0_0_15px_rgba(168,85,247,0.15)]">
+<span class="material-symbols-outlined text-[15px] text-purple-300">view_in_ar</span>
+<span class="font-mono-tech text-[11px] sm:text-xs text-purple-200 font-medium tracking-wider uppercase">PORTAL MODE: OMEGA-VII</span>
+</div>
+</header>
+<!-- 2. CENTRAL STAGE (ZIN - RAVEN - THOS & CONTENT BLOCKS) -->
+<div class="w-full flex-1 relative flex items-center justify-center my-auto">
+<!-- Monumental Split Serif Wordmark: ZIN on left, THOS on right -->
+<div class="absolute inset-0 pointer-events-none z-10 flex items-center justify-between px-2 sm:px-6 md:px-12 lg:px-16 select-none overflow-hidden">
+<!-- ZIN on the Left -->
+<div class="w-1/2 flex justify-start items-center">
+<h1 class="font-display font-bold uppercase tracking-[-0.04em] text-[18vw] lg:text-[19vw] leading-none text-transparent bg-clip-text bg-gradient-to-r from-[#dec4f7] via-[#c4a0ea] to-[#b385e2] drop-shadow-[0_0_35px_rgba(196,160,234,0.35)] opacity-95">
+            ZIN
+          </h1>
+</div>
+<!-- THOS on the Right -->
+<div class="w-1/2 flex justify-end items-center">
+<h1 class="font-display font-bold uppercase tracking-[-0.04em] text-[18vw] lg:text-[19vw] leading-none text-transparent bg-clip-text bg-gradient-to-r from-[#ad7cdb] via-[#c9a7ed] to-[#dec4f7] drop-shadow-[0_0_35px_rgba(196,160,234,0.35)] opacity-95">HOS</h1>
+</div>
+</div>
+<!-- Cosmic Sacred Geometry Ring / Glowing Mandala behind Raven (Reacts subtly to evasion) -->
+<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[340px] sm:w-[460px] md:w-[540px] lg:w-[600px] h-[340px] sm:h-[460px] md:h-[540px] lg:h-[600px] pointer-events-none flex items-center justify-center z-15 will-change-transform" id="sigil-container">
+<!-- Outer Rotating Astrolabe Sigil -->
+<svg class="w-full h-full text-purple-400/20 animate-spin" fill="none" style="animation-duration: 120s;" viewbox="0 0 400 400">
+<circle cx="200" cy="200" r="192" stroke="currentColor" stroke-dasharray="3 7" stroke-width="1"></circle>
+<circle cx="200" cy="200" r="172" stroke="currentColor" stroke-opacity="0.6" stroke-width="0.75"></circle>
+<circle cx="200" cy="200" r="148" stroke="currentColor" stroke-dasharray="10 20" stroke-width="1"></circle>
+<polygon points="200,28 348,286 52,286" stroke="currentColor" stroke-dasharray="2 5" stroke-width="0.75"></polygon>
+<polygon points="200,372 52,114 348,114" stroke="currentColor" stroke-dasharray="2 5" stroke-width="0.75"></polygon>
+</svg>
+<!-- Concentric Inner Glowing Rings -->
+<div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+<svg class="w-64 sm:w-80 md:w-96 h-64 sm:h-80 md:h-96 text-purple-300/30 animate-spin" fill="none" style="animation-duration: 50s; animation-direction: reverse;" viewbox="0 0 200 200">
+<circle cx="100" cy="100" r="95" stroke="currentColor" stroke-dasharray="6 6" stroke-width="1.2"></circle>
+<circle cx="100" cy="100" r="82" stroke="currentColor" stroke-width="0.6"></circle>
+<circle cx="100" cy="100" r="64" stroke="currentColor" stroke-dasharray="2 4" stroke-width="0.8"></circle>
+</svg>
+</div>
+<!-- Inner Aura Glow -->
+<div class="absolute w-56 sm:w-72 h-56 sm:h-72 rounded-full bg-purple-600/25 blur-3xl"></div>
+</div>
+<!-- Center Floating Raven Artwork with Interactive Repulsion Wrapper -->
+<div class="relative z-20 flex flex-col items-center justify-center pointer-events-auto will-change-transform" id="raven-repulsion-wrapper">
+<div class="float-animate transition-transform duration-700 hover:scale-[1.03]">
+<img alt="Raven floating with outstretched arms and dark energy spheres" class="w-[280px] sm:w-[380px] md:w-[440px] lg:w-[490px] max-h-[64vh] object-contain drop-shadow-[0_15px_35px_rgba(78,14,120,0.7)] pointer-events-auto" id="raven-figure" src="https://lh3.googleusercontent.com/aida-public/AB6AXuACHbLoS0XdIMK-Rktwi0hjCYYJMlUHDkmG16pAVerzTve8LdVzdiBeDK7pImh9WOWS8BxTPtFGZr6eBb838vwxnt6e7z9241yeGM97xSaII61N42DNyZ6I2AzZ2Dq7GHUoF5Z0UtsilSuBde7wyaRR6pipL972tz5P9EB2awftue6J5Rq6geSTLercsbcJ5rnZCl9ebpk3SSZ2FyPuo2ownHrIf7ikoYqhlN_kzZv1lQvQGYN4Ba_R0GVAT6kqxaN0glY"/>
+</div>
+<!-- Floating Ground Shadow -->
+<div class="shadow-animate w-36 sm:w-52 h-4 rounded-full bg-purple-950/70 blur-md -mt-2 pointer-events-none transition-transform duration-300" id="raven-shadow"></div>
+</div>
+<!-- 3. LEFT CONTENT BLOCK (Directly underneath "ZIN") -->
+<div class="absolute left-2 sm:left-6 md:left-10 bottom-4 sm:bottom-8 lg:bottom-12 z-25 max-w-[280px] sm:max-w-[340px] md:max-w-[390px] text-left">
+<!-- Magenta Headline -->
+<h2 class="text-sm sm:text-base md:text-lg font-bold tracking-wider uppercase text-[#ff3399] font-mono-tech mb-2 sm:mb-2.5 drop-shadow-[0_0_12px_rgba(255,51,153,0.4)]">
+          MUSIC, WITHOUT THE BOX.
+        </h2>
+<!-- Subtext Copy -->
+<div class="text-xs sm:text-sm text-purple-100/80 leading-relaxed font-body font-normal space-y-0.5 mb-4 sm:mb-5">
+<p class="">Search by feeling. Follow the sound.</p>
+<p class="">Build your journey. Explore deeper.</p>
+</div>
+<!-- ENTER ZINTHOS > CTA Button -->
+<a class="inline-flex items-center space-x-3 px-5 py-2.5 rounded-lg sm:rounded-xl bg-gradient-to-r from-[#2c0f4d] to-[#4c167d] border border-purple-500/60 shadow-[0_0_20px_rgba(168,85,247,0.35)] hover:shadow-[0_0_30px_rgba(230,0,126,0.5)] hover:border-pink-500/80 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 group cursor-pointer" href="#enter">
+<span class="font-mono-tech text-xs sm:text-sm font-semibold tracking-widest text-purple-100 group-hover:text-white uppercase">ENTER ZINTHOS</span>
+<span class="material-symbols-outlined text-sm sm:text-base text-purple-300 group-hover:text-white group-hover:translate-x-0.5 transition-transform">arrow_forward_ios</span>
+</a>
+</div>
+<!-- 4. RIGHT CONTENT BLOCK (Directly underneath "THOS") -->
+<div class="absolute right-2 sm:right-6 md:right-10 bottom-12 sm:bottom-16 lg:bottom-20 z-25 text-right pointer-events-none">
+<p class="font-mono-tech text-[10px] sm:text-xs tracking-[0.25em] uppercase text-purple-200/80 font-medium">SAME MUSIC.</p>
+<p class="font-mono-tech text-[10px] sm:text-xs tracking-[0.25em] uppercase text-purple-300/60 font-medium mt-1">DIFFERENT DIMENSIONS.</p>
+</div>
+</div>
+<!-- 5. BOTTOM TELEMETRY BAR / FOOTER -->
+<footer class="w-full flex items-center justify-between pt-2 z-30 font-mono-tech text-[10px] sm:text-[11px] text-purple-300/65">
+<!-- Bottom Left: SCROLL TO EXPLORE -->
+<div class="flex items-center space-x-1.5 tracking-[0.18em] uppercase hover:text-purple-200 transition-colors cursor-pointer">
+<span class="text-xs">↓</span>
+<span class="">SCROLL TO EXPLORE</span>
+</div>
+<!-- Bottom Center: TRANSCENDENTAL EQUILIBRIUM ACTIVE -->
+<div class="hidden sm:flex items-center space-x-2 tracking-[0.22em] uppercase text-purple-300/50">
+<span class="w-1.5 h-1.5 rounded-full bg-purple-400/80"></span>
+<span class="">TRANSCENDENTAL EQUILIBRIUM ACTIVE</span>
+</div>
+<!-- Bottom Right: MUSIC × AI × DISCOVERY × YOU -->
+<div class="flex items-center space-x-2 tracking-[0.2em] uppercase hover:text-purple-200 transition-colors">
+<span class="">MUSIC</span>
+<span class="text-purple-500/60">×</span>
+<span class="">AI</span>
+<span class="text-purple-500/60">×</span>
+<span class="">DISCOVERY</span>
+<span class="text-purple-500/60">×</span>
+<span class="">YOU</span>
+</div>
+</footer>
+</div>
+<script>
+// Shared cursor state
+const mouseState = {
+  x: -9999,
+  y: -9999,
+  isInside: false
+};
+
+window.addEventListener('mousemove', (e) => {
+  mouseState.x = e.clientX;
+  mouseState.y = e.clientY;
+  mouseState.isInside = true;
+});
+
+window.addEventListener('mouseleave', () => {
+  mouseState.isInside = false;
+  mouseState.x = -9999;
+  mouseState.y = -9999;
+});
+
+// Interactive Constellation Particle Canvas
+(function initConstellationCanvas() {
+  const canvas = document.getElementById('constellation-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  let width = (canvas.width = window.innerWidth);
+  let height = (canvas.height = window.innerHeight);
+
+  window.addEventListener('resize', () => {
+    width = canvas.width = window.innerWidth;
+    height = canvas.height = window.innerHeight;
+  });
+
+  const PARTICLE_COUNT = Math.min(110, Math.max(75, Math.floor((width * height) / 14000)));
+  const CONNECT_RADIUS = 165; // Proximity connect threshold
+  const particles = [];
+
+  class Particle {
+    constructor() {
+      this.reset(true);
+    }
+    reset(init = false) {
+      this.x = Math.random() * width;
+      this.y = init ? Math.random() * height : (Math.random() < 0.5 ? -5 : height + 5);
+      const speed = prefersReducedMotion ? 0.08 : (0.15 + Math.random() * 0.35);
+      const angle = Math.random() * Math.PI * 2;
+      this.vx = Math.cos(angle) * speed;
+      this.vy = Math.sin(angle) * speed;
+      this.radius = 1.1 + Math.random() * 1.5;
+      this.baseAlpha = 0.25 + Math.random() * 0.55;
+      this.twinkleSpeed = 0.008 + Math.random() * 0.015;
+      this.twinklePhase = Math.random() * Math.PI * 2;
+      // Soft lavender / cosmic purple color palette variations
+      const hues = [
+        'rgba(216, 180, 254,', // light lavender
+        'rgba(192, 132, 252,', // violet purple
+        'rgba(244, 114, 182,', // subtle fuchsia / pink
+        'rgba(168, 85, 247,'   // deep vibrant purple
+      ];
+      this.colorPrefix = hues[Math.floor(Math.random() * hues.length)];
+    }
+    update() {
+      this.x += this.vx;
+      this.y += this.vy;
+      this.twinklePhase += this.twinkleSpeed;
+
+      // Wrap around bounds with gentle margin
+      if (this.x < -20) this.x = width + 20;
+      else if (this.x > width + 20) this.x = -20;
+      if (this.y < -20) this.y = height + 20;
+      else if (this.y > height + 20) this.y = -20;
+    }
+    draw(ctx) {
+      const alphaPulse = Math.sin(this.twinklePhase) * 0.18;
+      const currentAlpha = Math.max(0.12, Math.min(0.9, this.baseAlpha + alphaPulse));
+
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+      ctx.fillStyle = `${this.colorPrefix} ${currentAlpha})`;
+      ctx.shadowBlur = this.radius * 3.5;
+      ctx.shadowColor = 'rgba(216, 180, 254, 0.7)';
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+  }
+
+  for (let i = 0; i < PARTICLE_COUNT; i++) {
+    particles.push(new Particle());
+  }
+
+  function render() {
+    ctx.clearRect(0, 0, width, height);
+
+    // Update and draw particles
+    for (let i = 0; i < particles.length; i++) {
+      particles[i].update();
+      particles[i].draw(ctx);
+    }
+
+    // Connect particles to cursor and to nearby neighbor particles in proximity
+    if (mouseState.isInside) {
+      const mx = mouseState.x;
+      const my = mouseState.y;
+
+      for (let i = 0; i < particles.length; i++) {
+        const p1 = particles[i];
+        const dCursor = Math.hypot(p1.x - mx, p1.y - my);
+
+        if (dCursor < CONNECT_RADIUS) {
+          // Line from particle to cursor
+          const cursorStrength = 1 - (dCursor / CONNECT_RADIUS);
+          ctx.beginPath();
+          ctx.moveTo(p1.x, p1.y);
+          ctx.lineTo(mx, my);
+          ctx.strokeStyle = `rgba(216, 180, 254, ${(cursorStrength * 0.38).toFixed(3)})`;
+          ctx.lineWidth = 0.75;
+          ctx.stroke();
+
+          // Connect with other particles within the active cursor sphere
+          for (let j = i + 1; j < particles.length; j++) {
+            const p2 = particles[j];
+            const distBetween = Math.hypot(p1.x - p2.x, p1.y - p2.y);
+
+            if (distBetween < 130) {
+              const dCursor2 = Math.hypot(p2.x - mx, p2.y - my);
+              if (dCursor2 < CONNECT_RADIUS) {
+                const linkStrength = (1 - (distBetween / 130)) * Math.min(cursorStrength, (1 - (dCursor2 / CONNECT_RADIUS)));
+                ctx.beginPath();
+                ctx.moveTo(p1.x, p1.y);
+                ctx.lineTo(p2.x, p2.y);
+                ctx.strokeStyle = `rgba(192, 132, 252, ${(linkStrength * 0.32).toFixed(3)})`;
+                ctx.lineWidth = 0.65;
+                ctx.stroke();
+              }
+            }
+          }
+        }
+      }
+    }
+
+    requestAnimationFrame(render);
+  }
+
+  requestAnimationFrame(render);
+})();
+
+// Raven Evasion Physics Loop
+(function initRavenRepulsion() {
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (prefersReducedMotion) return;
+
+  const ravenWrapper = document.getElementById('raven-repulsion-wrapper');
+  const ravenFigure = document.getElementById('raven-figure');
+  const sigilContainer = document.getElementById('sigil-container');
+  const shadowEl = document.getElementById('raven-shadow');
+
+  if (!ravenWrapper || !ravenFigure) return;
+
+  // Repulsion physics state
+  let targetX = 0;
+  let targetY = 0;
+  let targetRot = 0;
+  let currentX = 0;
+  let currentY = 0;
+  let currentRot = 0;
+
+  const REPULSION_RADIUS = 380; // Radius where repulsion starts
+  const MAX_DISPLACEMENT = 38;  // Maximum translation cap in pixels for subtle, elegant evasion
+  const MAX_ROTATION = 3.5;     // Delicate, softened evasion tilt in degrees
+  const LERP_FACTOR = 0.038;    // Heavy, dreamy, slow floating glide easing rate
+
+  function update() {
+    // Determine the center anchor of Raven in viewport coordinates
+    const rect = ravenFigure.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height * 0.42; // Center of torso/orbs
+
+    if (mouseState.isInside) {
+      const dx = centerX - mouseState.x; // Vector pointing AWAY from mouse
+      const dy = centerY - mouseState.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance < REPULSION_RADIUS && distance > 0.1) {
+        // Softened non-linear ease: gentle, mystical evasion rather than abrupt push
+        const normalized = 1 - (distance / REPULSION_RADIUS);
+        const impulse = Math.pow(normalized, 1.8) * MAX_DISPLACEMENT;
+
+        const dirX = dx / distance;
+        const dirY = dy / distance;
+
+        targetX = dirX * impulse;
+        targetY = dirY * impulse;
+
+        // Evasive tilt / delicate lean away from cursor approach
+        targetRot = -dirX * normalized * MAX_ROTATION;
+      } else {
+        // Natural hovering equilibrium
+        targetX = 0;
+        targetY = 0;
+        targetRot = 0;
+      }
+    } else {
+      targetX = 0;
+      targetY = 0;
+      targetRot = 0;
+    }
+
+    // Interpolate towards target smoothly with dreamy cosmic drift
+    currentX += (targetX - currentX) * LERP_FACTOR;
+    currentY += (targetY - currentY) * LERP_FACTOR;
+    currentRot += (targetRot - currentRot) * LERP_FACTOR;
+
+    // Apply transform to Raven wrapper
+    ravenWrapper.style.transform = `translate3d(${currentX.toFixed(2)}px, ${currentY.toFixed(2)}px, 0px) rotate(${currentRot.toFixed(2)}deg)`;
+
+    // Counter-adjust the ground shadow so it follows realistically and softly
+    if (shadowEl) {
+      shadowEl.style.transform = `translate3d(${(-currentX * 0.35).toFixed(2)}px, 0px, 0px) scale(${1 - Math.abs(currentY) / 320})`;
+    }
+
+    // Subtly affect sacred geometry sigil behind Raven with slight parallax evasion
+    if (sigilContainer) {
+      sigilContainer.style.transform = `translate(calc(-50% + ${(currentX * 0.2).toFixed(2)}px), calc(-50% + ${(currentY * 0.2).toFixed(2)}px))`;
+    }
+
+    requestAnimationFrame(update);
+  }
+
+  requestAnimationFrame(update);
+})();
+</script>
+</body></html>

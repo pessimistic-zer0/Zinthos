@@ -1,0 +1,1417 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>4-Way Character Arc Selection</title>
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,600;0,700;0,800;1,400&amp;family=JetBrains+Mono:wght@400;500;600;700&amp;family=Space+Grotesk:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg-dark: #07050d;
+      --accent-purple: #9d4edd;
+      --accent-neon: #c77dff;
+      --accent-gold: #ffb703;
+      --text-main: #f3f0f7;
+      --text-muted: #958da5;
+      --cyan-neon: #06b6d4;
+      --purple-neon: #c084fc;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+    }
+
+    /* Viewport Stage */
+    .viewport-stage {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      min-height: 750px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    /* Collage Background Container */
+    .collage-bg-container {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none !important;
+      overflow: hidden;
+    }
+
+    .collage-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      filter: brightness(0.48) contrast(1.15) saturate(0.95);
+      transform: scale(1.02);
+      transition: filter 0.5s ease, transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+      pointer-events: none !important;
+    }
+
+    /* Atmospheric & Grid Layers */
+    .ambient-overlay {
+      position: absolute;
+      inset: 0;
+      background: 
+        radial-gradient(circle at center, rgba(13, 8, 26, 0.45) 0%, rgba(7, 4, 15, 0.82) 70%, #06030c 100%),
+        linear-gradient(180deg, rgba(7, 4, 15, 0.75) 0%, transparent 20%, transparent 80%, rgba(6, 3, 12, 0.9) 100%);
+      pointer-events: none !important;
+      z-index: 2;
+    }
+
+    .vignette-grid {
+      position: absolute;
+      inset: 0;
+      background-image: linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+      background-size: 48px 48px;
+      pointer-events: none !important;
+      z-index: 3;
+    }
+
+    /* Top Bar */
+    header.top-nav {
+      position: relative;
+      z-index: 40;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 24px 44px;
+      backdrop-filter: blur(12px);
+      background: linear-gradient(to bottom, rgba(10, 6, 20, 0.8), transparent);
+      pointer-events: none;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+
+    .pulse-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 10px #10b981;
+      animation: blink 2s infinite ease-in-out;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      pointer-events: auto !important;
+    }
+
+    .reset-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: var(--text-main);
+      padding: 8px 18px;
+      border-radius: 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      cursor: pointer !important;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+      pointer-events: auto !important;
+    }
+
+    .reset-btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.25);
+      transform: translateY(-1px);
+    }
+
+    /* Center HUD */
+    .center-hud {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 10;
+      text-align: center;
+      pointer-events: none !important;
+      max-width: 580px;
+      padding: 0 20px;
+      transition: opacity 0.35s ease, transform 0.35s ease;
+    }
+
+    .instruction-tag {
+      display: inline-block;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      color: var(--accent-neon);
+      margin-bottom: 12px;
+      padding: 4px 12px;
+      border-radius: 4px;
+      background: rgba(157, 78, 221, 0.15);
+      border: 1px solid rgba(157, 78, 221, 0.3);
+      pointer-events: none !important;
+    }
+
+    .hud-title {
+      font-size: 34px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      margin-bottom: 10px;
+      text-shadow: 0 4px 24px rgba(0, 0, 0, 0.8);
+      background: linear-gradient(180deg, #ffffff 40%, #c4b5fd 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      pointer-events: none !important;
+    }
+
+    .hud-desc {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.5;
+      margin-bottom: 24px;
+      pointer-events: none !important;
+    }
+
+    .selection-summary-pill {
+      pointer-events: auto !important;
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(14, 10, 24, 0.85);
+      border: 1px solid rgba(199, 125, 255, 0.35);
+      backdrop-filter: blur(16px);
+      padding: 10px 22px;
+      border-radius: 999px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      cursor: pointer;
+    }
+
+    .selection-summary-pill.active {
+      border-color: #a855f7;
+      background: rgba(28, 16, 52, 0.95);
+      box-shadow: 0 0 35px rgba(168, 85, 247, 0.4);
+    }
+
+    .pill-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--text-muted);
+      letter-spacing: 0.05em;
+    }
+
+    .pill-value {
+      font-weight: 700;
+      font-size: 13px;
+      color: #fff;
+    }
+
+    .confirm-btn {
+      background: linear-gradient(135deg, #9d4edd, #7b2cbf);
+      border: none;
+      color: white;
+      font-weight: 700;
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      padding: 6px 14px;
+      border-radius: 999px;
+      cursor: pointer !important;
+      pointer-events: auto !important;
+      box-shadow: 0 4px 14px rgba(157, 78, 221, 0.4);
+      transition: transform 0.2s, background 0.2s;
+    }
+
+    .confirm-btn:hover {
+      transform: scale(1.05);
+      background: linear-gradient(135deg, #b05fe6, #8b34d9);
+    }
+
+    /* 4 CORNER INTERACTIVE POLAROIDS & OPTION CARDS */
+    .option-card, .corner-option {
+      position: absolute;
+      z-index: 30 !important;
+      cursor: pointer !important;
+      pointer-events: auto !important;
+      transition: transform 0.45s cubic-bezier(0.34, 1.45, 0.7, 1), box-shadow 0.4s ease, filter 0.4s ease, opacity 0.35s ease;
+      transform-origin: center center;
+    }
+
+    .polaroid-card {
+      position: relative;
+      width: 270px;
+      background: rgba(22, 16, 32, 0.92);
+      padding: 10px 10px 20px 10px;
+      border-radius: 8px;
+      box-shadow: 0 14px 28px rgba(0, 0, 0, 0.65), inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+      transition: all 0.35s cubic-bezier(0.2, 0.9, 0.3, 1);
+      pointer-events: auto !important;
+      cursor: pointer !important;
+    }
+
+    .photo-crop {
+      position: relative;
+      width: 100%;
+      height: 200px;
+      overflow: hidden;
+      background: #110d1c;
+      border-radius: 4px;
+      pointer-events: none;
+    }
+
+    .photo-crop img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      pointer-events: none;
+      transition: transform 0.5s ease, filter 0.4s ease;
+      filter: brightness(0.9) contrast(1.05);
+    }
+
+    .sheen {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, transparent 45%, rgba(157, 78, 221, 0.15) 100%);
+      pointer-events: none;
+      opacity: 0.4;
+      transition: opacity 0.3s;
+    }
+
+    .choice-badge {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 5;
+      background: rgba(15, 10, 24, 0.88);
+      color: #fff;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 4px 8px;
+      border-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      backdrop-filter: blur(8px);
+      transition: all 0.3s ease;
+      pointer-events: none;
+    }
+
+    .checkbox-icon {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(255, 255, 255, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.25s ease;
+    }
+
+    .checkbox-icon svg {
+      display: none;
+      width: 10px;
+      height: 10px;
+      stroke: #7e22ce;
+      stroke-width: 3;
+    }
+
+    .corner-option.selected .choice-badge {
+      background: #a855f7;
+      border-color: #c084fc;
+      color: #ffffff;
+      box-shadow: 0 0 12px rgba(168, 85, 247, 0.8);
+    }
+
+    .corner-option.selected .checkbox-icon {
+      background: #ffffff;
+      border-color: #ffffff;
+    }
+
+    .corner-option.selected .checkbox-icon svg {
+      display: block;
+    }
+
+    .polaroid-footer {
+      margin-top: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      pointer-events: none;
+    }
+
+    .option-title {
+      font-size: 15px;
+      font-weight: 800;
+      color: #f3f0f7;
+      letter-spacing: -0.01em;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .option-tagline {
+      font-size: 11px;
+      color: #958da5;
+      font-weight: 500;
+      line-height: 1.35;
+    }
+
+    .select-prompt-chip {
+      margin-top: 8px;
+      padding: 5px 8px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #c77dff;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9.5px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      text-align: center;
+      transition: all 0.25s ease;
+      border: 1px solid rgba(199, 125, 255, 0.25);
+    }
+
+    /* Corner Positioning */
+    .corner-tl {
+      top: calc(50% - 270px) !important;
+      left: calc(50% - 450px) !important;
+      transform: rotate(-3.5deg) !important;
+    }
+    .corner-tr {
+      top: calc(50% - 270px) !important;
+      left: calc(50% + 180px) !important;
+      transform: rotate(3.5deg) !important;
+    }
+    .corner-bl {
+      top: calc(50% + 45px) !important;
+      left: calc(50% - 450px) !important;
+      transform: rotate(2.5deg) !important;
+    }
+    .corner-br {
+      top: calc(50% + 45px) !important;
+      left: calc(50% + 180px) !important;
+      transform: rotate(-2.5deg) !important;
+    }
+
+    /* Hover & Focus states */
+    .corner-option:hover {
+      z-index: 100 !important;
+    }
+    .corner-option:hover .polaroid-card {
+      background: #ffffff !important;
+      box-shadow: 0 30px 65px rgba(0, 0, 0, 0.95), 0 0 0 3px #a855f7, 0 0 45px rgba(168, 85, 247, 0.7) !important;
+    }
+    .corner-option:hover .polaroid-card .option-title {
+      color: #1a162b !important;
+    }
+    .corner-option:hover .polaroid-card .option-tagline {
+      color: #6d647e !important;
+    }
+    .corner-option:hover .photo-crop img {
+      filter: brightness(1) contrast(1) saturate(1) !important;
+      transform: scale(1.04);
+    }
+    .corner-option:hover .select-prompt-chip {
+      background: #9d4edd;
+      color: #ffffff;
+    }
+
+    .corner-tl:hover { transform: rotate(0deg) scale(1.06) translate(-8px, -8px) !important; }
+    .corner-tr:hover { transform: rotate(0deg) scale(1.06) translate(8px, -8px) !important; }
+    .corner-bl:hover { transform: rotate(0deg) scale(1.06) translate(-8px, 8px) !important; }
+    .corner-br:hover { transform: rotate(0deg) scale(1.06) translate(8px, 8px) !important; }
+
+    /* Selected state */
+    .corner-option.selected .polaroid-card {
+      background: #ffffff !important;
+      box-shadow: 0 35px 75px rgba(0, 0, 0, 0.95), 0 0 0 3px #a855f7, 0 0 50px rgba(168, 85, 247, 0.75) !important;
+    }
+    .corner-option.selected .polaroid-card .option-title {
+      color: #1a162b !important;
+    }
+    .corner-option.selected .polaroid-card .option-tagline {
+      color: #6d647e !important;
+    }
+    .corner-option.selected .select-prompt-chip {
+      background: #10b981 !important;
+      color: #ffffff !important;
+      border-color: #059669;
+    }
+
+    /* Footer Key Hint */
+    footer.bottom-bar {
+      position: relative;
+      z-index: 40;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 44px;
+      background: linear-gradient(to top, rgba(7, 4, 15, 0.9) 0%, transparent 100%);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+
+    .guide-hint {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .key-cap {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 2px 7px;
+      border-radius: 4px;
+      color: #fff;
+      font-size: 10px;
+    }
+
+    /* ============================================================
+       TWO-PANE SPLIT MODAL POPUP
+       ============================================================ */
+    .spotlight-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: rgba(6, 4, 12, 0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      visibility: hidden;
+      transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.35s;
+      padding: 20px;
+    }
+
+    .spotlight-backdrop.open {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto !important;
+    }
+
+    .split-modal-container {
+      width: 1040px;
+      max-width: 95vw;
+      background: #090611;
+      border: 1px solid rgba(168, 85, 247, 0.35);
+      border-radius: 18px;
+      box-shadow: 0 35px 90px -10px rgba(0, 0, 0, 0.95), 0 0 60px rgba(157, 78, 221, 0.22), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 24px;
+      padding: 26px;
+      position: relative;
+      transform: scale(0.96) translateY(12px);
+      transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+      opacity: 0;
+      min-height: 520px;
+    }
+
+    .spotlight-backdrop.open .split-modal-container {
+      transform: scale(1) translateY(0);
+      opacity: 1;
+    }
+
+    /* Close Button */
+    .modal-close-btn {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      z-index: 50;
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #cfc2d6;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer !important;
+      transition: all 0.2s ease;
+    }
+
+    .modal-close-btn:hover {
+      background: rgba(168, 85, 247, 0.25);
+      border-color: #c084fc;
+      color: #ffffff;
+      transform: scale(1.05);
+    }
+
+    /* ============================================================
+       LEFT PANE: Selected Character Photo Card
+       ============================================================ */
+    .left-character-pane {
+      background: #130e20;
+      border: 1px solid rgba(168, 85, 247, 0.25);
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 8px 24px rgba(0, 0, 0, 0.4);
+    }
+
+    .left-photo-wrap {
+      position: relative;
+      width: 100%;
+      height: 250px;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #0d0918;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .left-photo-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      transition: transform 0.4s ease;
+    }
+
+    .left-photo-badge {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 3;
+      padding: 4px 8px;
+      background: rgba(14, 9, 24, 0.9);
+      border: 1px solid rgba(199, 125, 255, 0.35);
+      border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9.5px;
+      font-weight: 700;
+      color: #ddb7ff;
+      letter-spacing: 0.08em;
+    }
+
+    .speech-bubble {
+      margin-top: 14px;
+      background: linear-gradient(135deg, rgba(38, 20, 64, 0.7) 0%, rgba(22, 14, 38, 0.85) 100%);
+      border: 1px solid rgba(168, 85, 247, 0.35);
+      border-radius: 8px;
+      padding: 12px 14px;
+      position: relative;
+    }
+
+    .speech-bubble::before {
+      content: '';
+      position: absolute;
+      top: -6px;
+      left: 28px;
+      width: 10px;
+      height: 10px;
+      background: #23133b;
+      border-top: 1px solid rgba(168, 85, 247, 0.35);
+      border-left: 1px solid rgba(168, 85, 247, 0.35);
+      transform: rotate(45deg);
+    }
+
+    .speech-quote {
+      font-size: 13.5px;
+      font-weight: 600;
+      color: #f3f0f7;
+      font-style: italic;
+      line-height: 1.4;
+    }
+
+    .left-char-meta {
+      margin-top: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .left-char-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: #fff;
+      letter-spacing: -0.01em;
+    }
+
+    .left-char-sub {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11.5px;
+      color: #ddb7ff;
+    }
+
+    .left-bottom-tagline {
+      margin-top: 14px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.12em;
+      color: #988d9f;
+      text-transform: uppercase;
+      line-height: 1.35;
+    }
+
+    /* ============================================================
+       RIGHT PANE: Exact Match to IMAGE_2 (Query & Results Box)
+       ============================================================ */
+    .right-boxes-pane {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      flex: 1;
+      min-width: 0;
+      padding-top: 4px;
+    }
+
+    /* Top Query Box with Legend Style Border */
+    .terminal-fieldset-query {
+      border: 1.5px solid #06b6d4;
+      border-radius: 8px;
+      padding: 8px 14px 10px 14px;
+      background: transparent;
+      box-shadow: 0 0 14px rgba(6, 182, 212, 0.12);
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+      position: relative;
+    }
+
+    .terminal-fieldset-query:focus-within {
+      border-color: #38bdf8;
+      box-shadow: 0 0 20px rgba(56, 189, 248, 0.28);
+    }
+
+    .terminal-legend-query {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      font-weight: 500;
+      color: #06b6d4;
+      padding: 0 8px;
+      letter-spacing: 0.04em;
+    }
+
+    .query-input-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding-top: 2px;
+      position: relative;
+    }
+
+    .terminal-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px;
+      color: #e0f2fe;
+      caret-color: #38bdf8;
+      letter-spacing: 0.02em;
+    }
+
+    .terminal-input::placeholder {
+      color: #334155;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .blinking-cursor-block {
+      display: inline-block;
+      width: 9px;
+      height: 17px;
+      background-color: #ffffff;
+      animation: blinkCursor 1s step-end infinite;
+      vertical-align: middle;
+      pointer-events: none;
+    }
+
+    @keyframes blinkCursor {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+
+    /* Bottom Results Box with Legend Style Border */
+    .terminal-fieldset-results {
+      border: 1.5px solid #c084fc;
+      border-radius: 8px;
+      padding: 14px 18px;
+      background: transparent;
+      box-shadow: 0 0 16px rgba(192, 132, 252, 0.08);
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      min-height: 340px;
+    }
+
+    .terminal-legend-results {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      font-weight: 500;
+      color: #c084fc;
+      padding: 0 8px;
+      letter-spacing: 0.04em;
+    }
+
+    .results-inner-content {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      gap: 12px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12.5px;
+      padding-top: 4px;
+    }
+
+    .results-inner-content::-webkit-scrollbar {
+      width: 5px;
+    }
+    .results-inner-content::-webkit-scrollbar-thumb {
+      background: rgba(192, 132, 252, 0.25);
+      border-radius: 4px;
+    }
+
+    /* Terminal Row Item */
+    .terminal-result-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 10px 14px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(192, 132, 252, 0.15);
+      border-radius: 6px;
+      transition: background 0.2s, border-color 0.2s;
+    }
+
+    .terminal-result-row:hover {
+      background: rgba(192, 132, 252, 0.07);
+      border-color: rgba(192, 132, 252, 0.4);
+    }
+
+    .result-row-prefix {
+      color: #06b6d4;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .result-row-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .result-row-title {
+      color: #f3f0f7;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .result-row-desc {
+      color: #958da5;
+      font-size: 11px;
+      line-height: 1.4;
+    }
+
+    .result-row-meta {
+      color: #c084fc;
+      font-size: 10.5px;
+      margin-top: 2px;
+      display: flex;
+      gap: 14px;
+    }
+
+    .empty-state-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      color: #4a3e63;
+      text-align: center;
+      gap: 8px;
+    }
+
+    .empty-state-symbol {
+      font-size: 24px;
+      color: #3b2d54;
+      font-family: monospace;
+    }
+
+    @media (max-width: 900px) {
+      .split-modal-container {
+        grid-template-columns: 1fr;
+        max-height: 88vh;
+        overflow-y: auto;
+      }
+      .left-photo-wrap {
+        height: 180px;
+      }
+      .terminal-fieldset-results {
+        min-height: 240px;
+      }
+    }
+
+    @media (max-width: 1200px) {
+      .polaroid-card { width: 230px; }
+      .photo-crop { height: 160px; }
+      .corner-tl { top: calc(50% - 240px) !important; left: calc(50% - 370px) !important; }
+      .corner-tr { top: calc(50% - 240px) !important; left: calc(50% + 140px) !important; }
+      .corner-bl { top: calc(50% + 40px) !important; left: calc(50% - 370px) !important; }
+      .corner-br { top: calc(50% + 40px) !important; left: calc(50% + 140px) !important; }
+    }
+</style>
+</head>
+<body>
+<div class="viewport-stage" id="stage">
+<!-- Original Background Collage -->
+<div class="collage-bg-container">
+<img alt="Raven Collage Background" class="collage-img" id="bgCollage" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAON1h1PBNUsLPrlnqwWx53LmsUHqNWQ-jfd30BDunXZDR8g4XZvhZ9wrxV81oNHAEB4Y-Oa9gZcrqUBJzk5gKxV5OUBjkzZcS2GPWpYXB1PWDj9_JxsmCtPXHGgUxM1PAHPehU3qoR3SoyfF9A49JgWX65cZD3FG_yLq3xQeaaFQN1Jev_cBagxyZ2xeb7_NfoLTBId0dfFBlBRxVoDDGj2LnwqUxFjN0yR3s4sebIgXoYQ0S1xVmE6PNjPSi4SEi7df0">
+</div>
+<!-- Atmospheric & Grid Tint Layers -->
+<div class="ambient-overlay"></div>
+<div class="vignette-grid"></div>
+<!-- Top Minimal Navigation -->
+<header class="top-nav">
+<div class="status-badge">
+<span class="pulse-dot"></span>
+<span class="">Decision Matrix // Select 1 of 4</span>
+</div>
+<div class="nav-actions">
+<button class="reset-btn" id="resetBtn" title="Clear and Deselect Choice">
+<svg fill="none" height="12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" width="12"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
+        Reset Matrix
+      </button>
+</div>
+</header>
+<!-- Center HUD -->
+<div class="center-hud">
+<span class="instruction-tag">Interactive Selection</span>
+<h1 class="hud-title">Choose Your Identity</h1>
+<p class="hud-desc">Click any of the 4 corner cards to launch the persona probe &amp; query interface.</p>
+<div class="selection-summary-pill active" id="summaryPill" onclick="openModal(currentSelectedIndex)">
+<span class="pill-label">Selected:</span>
+<span class="pill-value" id="selectedTitleText">Cozy Slouch Raven</span>
+<button class="confirm-btn" id="confirmChoiceBtn" style="display: inline-block;">Open Query Modal →</button>
+</div>
+</div>
+<!-- CORNER OPTION 1: TOP-LEFT -->
+<div class="option-card corner-option corner-tl" data-id="0" id="opt-0" onclick="openModal(0)">
+<div class="polaroid-card">
+<div class="choice-badge">
+<div class="checkbox-icon">
+<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+</div>
+<span class="">OPTION 01</span>
+</div>
+<div class="photo-crop">
+<img alt="Option 01 - Disbelief Raven" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAaxMvFMbyINYh8Z2W0IykSjP5XMBrVkO_X8s9Rj4LaKthv4J9HyYBIyv98OXjgH1tWBvt7J6ZSw7NGWbZE4SmAgdIXj0mkdPHqsAg23KDTAx38pfOG9_ev5KEYvU5FHGgLA1uc7wkKrAWdFUEoGUq4T5StoIfp4W6DnAGzpuGGznyFMMCOEK7ob-wU_R91XSTUb68C_yKhVod46Y92pCpFGpRGkCG7BvZ-b1Zn-d98PQeLlzeewIE74g5MhCIJRqKaOv0">
+<div class="sheen"></div>
+</div>
+<div class="polaroid-footer">
+<div class="option-title">
+<span class="">Disbelief</span>
+<span style="font-size:11px; color:#8e82a3; font-weight:normal;" class="">#01</span>
+</div>
+<div class="option-tagline">Bewildered deadpan sarcasm</div>
+<div class="select-prompt-chip">Click to Select</div>
+</div>
+</div>
+</div>
+<!-- CORNER OPTION 2: TOP-RIGHT -->
+<div class="option-card corner-option corner-tr" data-id="1" id="opt-1" onclick="openModal(1)">
+<div class="polaroid-card">
+<div class="choice-badge">
+<div class="checkbox-icon">
+<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+</div>
+<span class="">OPTION 02</span>
+</div>
+<div class="photo-crop">
+<img alt="Option 02 - Rebel Chic Raven" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC0E2iDwqqVVUbzF3hjIh-1FjUdoLtdh1JgRiIoF93PzKn6SzhabtZz5Va2cnUMLDe6st9E-MQjBsZxSn5NemrlkRHpcW6CC2qX6PC1TB234u_8hYhTcOiFsloDD5pzOHruMeBHnBAAN39kCc6uVH_6wS3slqoIrXcsl0gOwZYO2MM6eFyEz1FyESTPcimhArIcp-ylcLI29eIKpJg25Rf9N-OBBDgvRvhweWEBrbou5vwMMMyKaBSKPXCKwWSVUBfFgEU">
+<div class="sheen"></div>
+</div>
+<div class="polaroid-footer">
+<div class="option-title">
+<span class="">Rebel Chic</span>
+<span style="font-size:11px; color:#8e82a3; font-weight:normal;" class="">#02</span>
+</div>
+<div class="option-tagline">Side-eye street skepticism</div>
+<div class="select-prompt-chip">Click to Select</div>
+</div>
+</div>
+</div>
+<!-- CORNER OPTION 3: BOTTOM-LEFT -->
+<div class="option-card corner-option corner-bl" data-id="2" id="opt-2" onclick="openModal(2)">
+<div class="polaroid-card">
+<div class="choice-badge">
+<div class="checkbox-icon">
+<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+</div>
+<span class="">OPTION 03</span>
+</div>
+<div class="photo-crop">
+<img alt="Option 03 - Blushing Raven" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCu5N_gIg--b92L7F0eOAS0heHk-FwPvRqRH18e4quagmtT2gAYC94AmC7hSIAQKt3r25X593CxYFiLzt9wBiKMFrCsdbX_Yd2H4M8UCS-OxduSKDpD4WGdGWfho1ChwwklZ47eSPKNfOE648Kq3wmoZXRih_13O_JrSgPy2gnpK5KlaRk0tlkrX3mJIDE4H8Eb3YzOvc7JKN3h9dgt0ceOUl450zNxrKetsH1giEJsPgpSzpVFCE1Mayta00ORsre3zpA">
+<div class="sheen"></div>
+</div>
+<div class="polaroid-footer">
+<div class="option-title">
+<span class="">Blushing Smirk</span>
+<span style="font-size:11px; color:#8e82a3; font-weight:normal;" class="">#03</span>
+</div>
+<div class="option-tagline">Guarded warmth &amp; gentle smirk</div>
+<div class="select-prompt-chip">Click to Select</div>
+</div>
+</div>
+</div>
+<!-- CORNER OPTION 4: BOTTOM-RIGHT -->
+<div class="option-card corner-option corner-br selected" data-id="3" id="opt-3" onclick="openModal(3)">
+<div class="polaroid-card">
+<div class="choice-badge">
+<div class="checkbox-icon">
+<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+</div>
+<span class="">OPTION 04</span>
+</div>
+<div class="photo-crop">
+<img alt="Option 04 - Cozy Slouch Raven" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBZt-Yv8rLPLmp9FW3v7jR5WwwrlyARPpJ11naXuNn-M88NzjIlTULrnN9qtcJdWlJpEP-d1ty3X1aAN0y-yXZRjWeGfxWg0fVMtHq8rKiUAclzh-9T3xJ2hP_fYO74mz89_ZSsaebpGFxnCSP5qSTPm4bKB73x75iHDsrq2Aa5MsoVhBdNkwvdltuM6Poo4EFrGUSC1_cJhaBN-yJ7XDPduP3eLDZJKIudDs-_bqUdM8beRE79impceELPnymwifqAhHI">
+<div class="sheen"></div>
+</div>
+<div class="polaroid-footer">
+<div class="option-title">
+<span class="">Cozy Slouch</span>
+<span style="font-size:11px; color:#8e82a3; font-weight:normal;" class="">#04</span>
+</div>
+<div class="option-tagline">Low-energy chill &amp; comfort</div>
+<div class="select-prompt-chip">Selected ✓</div>
+</div>
+</div>
+</div>
+<!-- Bottom Bar -->
+<footer class="bottom-bar">
+<div class="guide-hint">
+<span class=""><span class="key-cap">CLICK</span> Select &amp; Expand Modal</span>
+<span class=""><span class="key-cap">HOVER</span> Preview Focus</span>
+<span class=""><span class="key-cap">ESC</span> Close Modal</span>
+</div>
+<div style="color: rgba(255,255,255,0.4);" class="">
+      ZINTHOS MATRIX // 4-WAY SELECTION
+    </div>
+</footer>
+</div>
+<!-- TWO-PANE SPLIT POPUP MODAL -->
+<div class="spotlight-backdrop" id="searchModal">
+<div class="split-modal-container" id="modalCard" style="width: 1200px; max-width: 95vw; min-height: 620px; padding: 36px; gap: 32px; grid-template-columns: 360px 1fr;">
+<!-- Close Button -->
+<button class="modal-close-btn" id="modalCloseBtn" onclick="closeModal()" title="Close (Esc)">
+<svg fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" viewBox="0 0 24 24" width="18">
+<line x1="18" x2="6" y1="6" y2="18"></line>
+<line x1="6" x2="18" y1="6" y2="18"></line>
+</svg>
+</button>
+<!-- 1. LEFT PANE: Selected Character Photo Card -->
+<div class="left-character-pane">
+<div>
+<div class="left-photo-wrap" style="height: 310px;">
+<img alt="Selected Persona" id="leftModalPhoto" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDLed6MJVKfuLTpM8A6tG872MSX-U4Blhcd_7g-KwkNXTBHdib0IDT4gMLxzKafCwBg606fpiif1p6BF777Df5YK0sZcVey99nndY5B9JxfaFETuQbf9zmL9LRPRfJxlNXNxt87GUVVecUdJ05krbAlMpzrjNzvYvI9_EonHW_6DxTONXu9cJWdrtpa4b1Ch-j0JwxGqko2cRPCisD19f4UdBvOKudgOhtKocxbbyAuzz30agimxCu9YSknKOGRap4IxTg">
+<div class="left-photo-badge" id="leftModalBadge">OPTION 04</div>
+</div>
+<div class="speech-bubble">
+<div class="speech-quote" id="leftModalSpeech">"What are you in the mood for?"</div>
+</div>
+<div class="left-char-meta">
+<div class="left-char-title" id="leftModalTitle">Cozy Slouch Raven</div>
+<div class="left-char-sub" id="leftModalSub">Low-energy chill &amp; comfort</div>
+</div>
+</div>
+<div class="left-bottom-tagline">
+        ZINTHOS UNDERSTANDS MORE THAN KEYWORDS.
+      </div>
+</div>
+<!-- 2. RIGHT PANE: Clean Query & Results Aesthetic from IMAGE_2 -->
+<div class="right-boxes-pane">
+<!-- Top Fieldset: Query -->
+<fieldset class="terminal-fieldset-query">
+<legend class="terminal-legend-query">Query</legend>
+<div class="query-input-wrap">
+<input autocomplete="off" class="terminal-input" id="personaQueryInput" oninput="handleQueryInput(this.value)" placeholder="" spellcheck="false" type="text">
+<span class="blinking-cursor-block" id="blinkingCursor" style="display: inline-block;"></span>
+</div>
+</fieldset>
+<!-- Bottom Fieldset: Results (dynamic count) -->
+<fieldset class="terminal-fieldset-results" style="min-height: 420px;">
+<legend class="terminal-legend-results" id="resultsCountLegend">Results (3)</legend>
+<div class="results-inner-content" id="resultsContentArea">
+      <div class="terminal-result-row">
+        <span class="result-row-prefix">&gt; [REC-01]</span>
+        <div class="result-row-body">
+          <div class="result-row-title">Hibernation Veil</div>
+          <div class="result-row-desc">Burrowed under layered microfiber blankets on the living room sofa.</div>
+          <div class="result-row-meta">MATCH 99.1% · CHAKRA: HIBERNATION · SECTOR 04</div>
+        </div>
+      </div>
+    
+      <div class="terminal-result-row">
+        <span class="result-row-prefix">&gt; [REC-02]</span>
+        <div class="result-row-body">
+          <div class="result-row-title">Low-Energy Sub-Harmonic</div>
+          <div class="result-row-desc">Herbal chamomile intake detected. Do not disturb Azarath protocols.</div>
+          <div class="result-row-meta">MATCH 95.8% · FREQ: 72 BPM · COUCH LOCK: CONFIRMED</div>
+        </div>
+      </div>
+    
+      <div class="terminal-result-row">
+        <span class="result-row-prefix">&gt; [REC-03]</span>
+        <div class="result-row-body">
+          <div class="result-row-title">Evening Broadcast Directive</div>
+          <div class="result-row-desc">"Pass the herbal tea and do not change the channel. Azarath can wait."</div>
+          <div class="result-row-meta">MATCH 94.2% · ARCHIVE: RESIDENTIAL WING</div>
+        </div>
+      </div>
+    </div>
+</fieldset>
+</div>
+</div>
+</div>
+<script>
+  // Complete data matrix for the 4 options
+  const optionsData = [
+    {
+      badge: "OPTION 01",
+      title: "Disbelief Raven",
+      tag: "Sarcastic Arc",
+      sub: "Bewildered deadpan sarcasm",
+      bubble: '"What are you in the mood for?"',
+      image: "https://lh3.googleusercontent.com/aida-public/AB6AXuBLj7V9p_dTcNNj8I7TdSzyfmOyjJgDQ6FHJTR16SGjj8JjH7dzfT52v9tXxy2vC9lfWVy4LxSQHTHCy8d401hCk5C-yrqmrgEly_WlgPnfd0_a2F9t17zRCHqs_oWDZOJbvx2wRGxbClYWn1k2JLnLPVDDnxqzTpUoJsx2qdqErdUmXfD4pgizQwRv3-7IEpKmNrMSM51n3IlutGJjR9jojI58SN8xNZkImEyDghHzxvtIIKD48MQslbMqf9xuAQpbpoo",
+      presetRecords: [
+        {
+          code: "REC-01",
+          title: "Sarcastic Deadpan Resonance",
+          desc: "Demonic energy suppressed; holding lukewarm kitchen mug with visible bewilderment.",
+          meta: "MATCH 99.4% · CHAKRA: DARK CORE · SECTOR 01"
+        },
+        {
+          code: "REC-02",
+          title: "Telekinetic Static Suppression",
+          desc: "Vortexes held under strict mental restraint. High irritability threshold.",
+          meta: "MATCH 96.2% · FREQ: 94 BPM · COFFEE RATIO: 82%"
+        },
+        {
+          code: "REC-03",
+          title: "Deadpan Monologue Protocol",
+          desc: "\"Are you actually being serious right now?\"",
+          meta: "MATCH 94.0% · ARCHIVE: AZARATH TOWER"
+        }
+      ]
+    },
+    {
+      badge: "OPTION 02",
+      title: "Rebel Chic Raven",
+      tag: "Cynical Attitude",
+      sub: "Side-eye street skepticism",
+      bubble: '"What are you in the mood for?"',
+      image: "https://lh3.googleusercontent.com/aida-public/AB6AXuA8DqN1y7DFiC197PW4NPUvZDUxEPwh8VOyN9kc-7S9RzuGd0nyzm1le_wvcHQhcPNDUsEZu4VeHGarPlV1mFog1Ms8kbTb3JiRiafphOAu0CJzpk6g3kK2lm_4e1hl6R76KOCJ_LUNNsUVsbwaU3FpGi2BSXy1sq6z0IfrIWk2DRDgsogXNjyIuOa4o2Pv4SBj8d_j6QxPQERCToq24IxMmFSmb6ni6zKCjBM4v9CXUUxoBxHHog2GysjNdylv3t-6yD8",
+      presetRecords: [
+        {
+          code: "REC-01",
+          title: "Urban Shadow Pulse",
+          desc: "Side-angled snapback cap blocks low-tier telepathic interference.",
+          meta: "MATCH 98.8% · CHAKRA: SHADOW WEAVE · SECTOR 02"
+        },
+        {
+          code: "REC-02",
+          title: "Cynical Chill Faction Log",
+          desc: "Anticipated every tactical maneuver three cycles prior. Extreme side-eye.",
+          meta: "MATCH 95.7% · FREQ: 88 BPM · VINYL NOISE: ACTIVE"
+        },
+        {
+          code: "REC-03",
+          title: "Street Cadence Diagnostic",
+          desc: "\"You think the cap is just for looks? It blocks bad ideas.\"",
+          meta: "MATCH 92.1% · ARCHIVE: JUMP CITY METRO"
+        }
+      ]
+    },
+    {
+      badge: "OPTION 03",
+      title: "Blushing Smirk Raven",
+      tag: "Guarded Warmth",
+      sub: "Guarded warmth & gentle smirk",
+      bubble: '"What are you in the mood for?"',
+      image: "https://lh3.googleusercontent.com/aida-public/AB6AXuA4NKg-2k8_CMDO1LW8cW2gV6-LG0xjfTAq_yRg49Q1es9KWL6TFfGDzVpLUnD5NcjZV2GdraCy4gmF_Uw9drgTs7gh3j34KYOR5Vl-15bIOr61YVtNhXrt3QtY82w2eg01inj151eTkv0RwmGy0at-FW7A2BgIvAJFMv5EHWtyCusdJcdSXaw-uXuGk29peIWeSItJ1DnHpDdF_1qIdgUnYL6esEdwGKwrkNGg9YPuDsGVhljsGgWgpfL6tI2HSPUNXxY",
+      presetRecords: [
+        {
+          code: "REC-01",
+          title: "Astral Lilac Harmonic",
+          desc: "Uncharacteristically soft smirk detected. Denies smiling vehemently.",
+          meta: "MATCH 97.9% · CHAKRA: ASTRAL LILAC · SECTOR 03"
+        },
+        {
+          code: "REC-02",
+          title: "Affinity Pulse Divergence",
+          desc: "Reflex reaction to comedic stimulation. Telekinesis glowing faint violet.",
+          meta: "MATCH 96.5% · FREQ: 106 BPM · GUARDED WARMTH"
+        },
+        {
+          code: "REC-03",
+          title: "Confidential Verbal Log",
+          desc: "\"I am definitely not smiling, it's just a telekinetic muscle reflex.\"",
+          meta: "MATCH 93.4% · ARCHIVE: TOWER COMMONS"
+        }
+      ]
+    },
+    {
+      badge: "OPTION 04",
+      title: "Cozy Slouch Raven",
+      tag: "Cozy Slouch",
+      sub: "Low-energy chill & comfort",
+      bubble: '"What are you in the mood for?"',
+      image: "https://lh3.googleusercontent.com/aida-public/AB6AXuDLed6MJVKfuLTpM8A6tG872MSX-U4Blhcd_7g-KwkNXTBHdib0IDT4gMLxzKafCwBg606fpiif1p6BF777Df5YK0sZcVey99nndY5B9JxfaFETuQbf9zmL9LRPRfJxlNXNxt87GUVVecUdJ05krbAlMpzrjNzvYvI9_EonHW_6DxTONXu9cJWdrtpa4b1Ch-j0JwxGqko2cRPCisD19f4UdBvOKudgOhtKocxbbyAuzz30agimxCu9YSknKOGRap4IxTg",
+      presetRecords: [
+        {
+          code: "REC-01",
+          title: "Hibernation Veil",
+          desc: "Burrowed under layered microfiber blankets on the living room sofa.",
+          meta: "MATCH 99.1% · CHAKRA: HIBERNATION · SECTOR 04"
+        },
+        {
+          code: "REC-02",
+          title: "Low-Energy Sub-Harmonic",
+          desc: "Herbal chamomile intake detected. Do not disturb Azarath protocols.",
+          meta: "MATCH 95.8% · FREQ: 72 BPM · COUCH LOCK: CONFIRMED"
+        },
+        {
+          code: "REC-03",
+          title: "Evening Broadcast Directive",
+          desc: "\"Pass the herbal tea and do not change the channel. Azarath can wait.\"",
+          meta: "MATCH 94.2% · ARCHIVE: RESIDENTIAL WING"
+        }
+      ]
+    }
+  ];
+
+  let currentSelectedIndex = 0;
+
+  function renderResults(records, query) {
+    const legend = document.getElementById('resultsCountLegend');
+    const container = document.getElementById('resultsContentArea');
+    if (!legend || !container) return;
+
+    if (!records || records.length === 0) {
+      legend.textContent = "Results (0)";
+      container.innerHTML = `
+        <div class="empty-state-wrap">
+          <div class="empty-state-symbol">_</div>
+          <div>No matching neural patterns found</div>
+          <div style="font-size:11px; color:#3b2d54;">Try terms like "sarcasm", "bass", "tea", "vibe", "cap", or "telekinetic"</div>
+        </div>
+      `;
+      return;
+    }
+
+    legend.textContent = `Results (${records.length})`;
+    container.innerHTML = records.map((rec, i) => `
+      <div class="terminal-result-row">
+        <span class="result-row-prefix">&gt; [${rec.code || '0' + (i+1)}]</span>
+        <div class="result-row-body">
+          <div class="result-row-title">${escapeHtml(rec.title)}</div>
+          <div class="result-row-desc">${escapeHtml(rec.desc)}</div>
+          <div class="result-row-meta">${escapeHtml(rec.meta)}</div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function handleQueryInput(val) {
+    const cursor = document.getElementById('blinkingCursor');
+    if (cursor) {
+      cursor.style.display = val.length > 0 ? 'none' : 'inline-block';
+    }
+
+    const currentData = optionsData[currentSelectedIndex];
+    if (!currentData) return;
+
+    const trimmed = val.trim().toLowerCase();
+    if (!trimmed) {
+      // Empty input: render initial records or empty state
+      renderResults(currentData.presetRecords);
+      return;
+    }
+
+    // Filter preset records or synthesize dynamic query match
+    const filtered = currentData.presetRecords.filter(r => 
+      r.title.toLowerCase().includes(trimmed) || 
+      r.desc.toLowerCase().includes(trimmed) ||
+      r.meta.toLowerCase().includes(trimmed)
+    );
+
+    if (filtered.length > 0) {
+      renderResults(filtered, trimmed);
+    } else {
+      // Dynamically create a synthesized query response row
+      const dynamicMatch = [
+        {
+          code: "SYNTH-01",
+          title: `Matched: "${val.trim()}"`,
+          desc: `Calculated high-resonance psychic link with ${currentData.title}. Synthesizing behavioral response...`,
+          meta: `MATCH 99.8% · SPECTRUM: ${currentData.tag.toUpperCase()} · DYNAMIC`
+        }
+      ];
+      renderResults(dynamicMatch, trimmed);
+    }
+  }
+
+  function openModal(index) {
+    if (index === undefined || index === null) index = 0;
+    currentSelectedIndex = Number(index);
+    const data = optionsData[currentSelectedIndex];
+    if (!data) return;
+
+    // Update corner card selection styles
+    for (let i = 0; i < 4; i++) {
+      const card = document.getElementById('opt-' + i);
+      if (card) {
+        const chip = card.querySelector('.select-prompt-chip');
+        if (i === currentSelectedIndex) {
+          card.classList.add('selected');
+          if (chip) chip.textContent = 'Selected ✓';
+        } else {
+          card.classList.remove('selected');
+          if (chip) chip.textContent = 'Click to Select';
+        }
+      }
+    }
+
+    // Update HUD Pill
+    const summaryPill = document.getElementById('summaryPill');
+    const selectedTitleText = document.getElementById('selectedTitleText');
+    if (summaryPill) summaryPill.classList.add('active');
+    if (selectedTitleText) selectedTitleText.textContent = data.title;
+
+    // Update LEFT PANE content
+    document.getElementById('leftModalPhoto').src = data.image;
+    document.getElementById('leftModalBadge').textContent = data.badge;
+    document.getElementById('leftModalSpeech').textContent = data.bubble;
+    document.getElementById('leftModalTitle').textContent = data.title;
+    document.getElementById('leftModalSub').textContent = data.sub;
+
+    // Reset Right Pane Query input & display preset records
+    const input = document.getElementById('personaQueryInput');
+    if (input) {
+      input.value = '';
+    }
+    const cursor = document.getElementById('blinkingCursor');
+    if (cursor) cursor.style.display = 'inline-block';
+
+    // Populate initial results for this character
+    renderResults(data.presetRecords);
+
+    // Open spotlight backdrop
+    const modal = document.getElementById('searchModal');
+    modal.classList.add('open');
+    setTimeout(() => {
+      if (input) input.focus();
+    }, 150);
+  }
+
+  function closeModal() {
+    const modal = document.getElementById('searchModal');
+    if (modal) modal.classList.remove('open');
+  }
+
+  function escapeHtml(text) {
+    if (!text) return '';
+    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    // Backdrop click to close
+    const searchModal = document.getElementById('searchModal');
+    if (searchModal) {
+      searchModal.addEventListener('click', (e) => {
+        if (e.target === searchModal) {
+          closeModal();
+        }
+      });
+    }
+
+    // Keyboard shortcuts
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeModal();
+      }
+    });
+
+    // Reset matrix button
+    const resetBtn = document.getElementById('resetBtn');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeModal();
+        for (let i = 0; i < 4; i++) {
+          const card = document.getElementById('opt-' + i);
+          if (card) {
+            card.classList.remove('selected');
+            const chip = card.querySelector('.select-prompt-chip');
+            if (chip) chip.textContent = 'Click to Select';
+          }
+        }
+        document.getElementById('summaryPill').classList.remove('active');
+        document.getElementById('selectedTitleText').textContent = 'Select a Quadrant';
+      });
+    }
+
+    // Initialize corner cards
+    for (let i = 0; i < 4; i++) {
+      const card = document.getElementById('opt-' + i);
+      if (card) {
+        card.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openModal(i);
+        });
+      }
+    }
+  });
+</script>
+
+
+</body></html>

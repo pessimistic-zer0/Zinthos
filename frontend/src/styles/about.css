@@ -1,0 +1,543 @@
+/* ── The page under the landing ────────────────────────────────────────────────
+   Normal flow, one viewport down, above the fixed landing. Scrolling slides it up over her.
+   The look is a spec sheet: chapter numbers, hairlines, big Bodoni set tight, and a lot of
+   air. Same rules as everywhere else: gradients and borders painted once, motion on
+   transform and opacity only. */
+
+.about {
+  position: relative;
+  z-index: 60; /* above .landing (50) */
+  margin-top: 100vh;
+  padding-top: clamp(64px, 9vh, 112px);
+  background: linear-gradient(180deg, #08060d 0%, #050309 45%, #030106 100%);
+  color: var(--text);
+  user-select: text;
+  /* The name at the foot runs off the bottom edge on purpose. `clip`, not `hidden`: hidden
+     makes this a scroll container that scrollIntoView and find-in-page can shift. */
+  overflow: clip;
+}
+/* The top edge is a rim like the shield's: a hairline that is brightest at the centre. */
+.about__edge {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(216, 180, 254, 0.55) 50%, transparent);
+}
+.about__edge::after {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 140px;
+  background: linear-gradient(180deg, rgba(168, 85, 247, 0.07), transparent);
+  pointer-events: none;
+}
+/* One soft light behind the opening, painted once. */
+.about__glow {
+  position: absolute;
+  top: -10vw;
+  left: -12vw;
+  width: 70vw;
+  height: 70vw;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(168, 85, 247, 0.11), rgba(168, 85, 247, 0) 62%);
+  pointer-events: none;
+}
+
+.about__col {
+  position: relative;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 0 clamp(20px, 5vw, 72px);
+}
+
+/* ── Chapter rule: number, name, note, over a hairline ─────────────────────── */
+.chapter {
+  display: flex;
+  align-items: baseline;
+  gap: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  font-family: var(--font-tech);
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(192, 132, 252, 0.7);
+}
+.chapter__n {
+  font-family: var(--font-mono);
+  color: var(--violet-200);
+}
+.chapter__note {
+  margin-left: auto;
+  color: rgba(152, 141, 159, 0.6);
+  letter-spacing: 0.16em;
+  text-align: right;
+}
+
+/* ── 00 · the claim ─────────────────────────────────────────────────────────── */
+.opening {
+  padding-bottom: clamp(48px, 7vh, 88px);
+}
+.opening__title {
+  margin-top: clamp(28px, 4vh, 48px);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(60px, 11.5vw, 190px);
+  line-height: 0.86;
+  letter-spacing: -0.035em;
+  text-transform: uppercase;
+  color: var(--violet-200);
+}
+/* Each line is clipped to its own box and slides up out of it. */
+.line {
+  display: block;
+  overflow: hidden;
+  /* The clip box is padded past the tight line-height, then pulled back with negative
+     margins, so bowls and the comma's tail are not sliced off while the rhythm stays. */
+  padding: 0.14em 0.08em 0.14em 0.02em;
+  margin: -0.14em 0 -0.14em -0.04em;
+}
+.line__in {
+  display: inline-block;
+  transform: translateY(135%);
+  transition: transform 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+  transition-delay: calc(var(--i, 0) * 110ms);
+  will-change: transform;
+}
+.is-in .line__in {
+  transform: none;
+}
+/* Hollow, like HOS on the shield. */
+.line__in.is-hollow {
+  color: transparent;
+  -webkit-text-stroke: 1.5px var(--violet-300);
+}
+.opening__row {
+  display: grid;
+  grid-template-columns: 1fr minmax(0, 52ch);
+  margin-top: clamp(28px, 4vh, 44px);
+}
+.opening__lead {
+  grid-column: 2;
+  font-size: clamp(15px, 1.2vw, 18px);
+  line-height: 1.7;
+  color: var(--text-muted);
+  padding-top: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* ── The band ──────────────────────────────────────────────────────────────── */
+.ticker {
+  overflow: hidden;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 13px 0;
+  font-family: var(--font-tech);
+  font-size: 11px;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--violet-300);
+  white-space: nowrap;
+}
+.ticker__track {
+  display: flex;
+  width: max-content;
+  animation: ticker 48s linear infinite;
+  animation-play-state: paused;
+  will-change: transform;
+}
+.ticker.is-live .ticker__track {
+  animation-play-state: running;
+}
+.ticker__set {
+  display: flex;
+}
+.ticker__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 28px;
+  padding-right: 28px;
+}
+.ticker__item i {
+  width: 5px;
+  height: 5px;
+  rotate: 45deg;
+  background: var(--violet-500);
+}
+/* Two identical sets, shifted by exactly one: the loop never shows a seam. */
+@keyframes ticker {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* ── 01 · three ways in ─────────────────────────────────────────────────────── */
+.ways {
+  padding-top: clamp(56px, 8vh, 96px);
+}
+.ways__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 8px;
+}
+.way {
+  position: relative;
+  padding: clamp(28px, 4vw, 52px) clamp(18px, 2.2vw, 32px) clamp(32px, 4vw, 56px) 0;
+  overflow: hidden;
+}
+.way + .way {
+  padding-left: clamp(18px, 2.2vw, 32px);
+  border-left: 1px solid rgba(168, 85, 247, 0.14);
+}
+/* A bar of the door's own colour, the width of the numeral at rest, the whole card on hover. */
+.way::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: hsl(var(--hue) 80% 65%);
+  transform: scaleX(0.14);
+  transform-origin: left;
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.way + .way::before {
+  left: clamp(18px, 2.2vw, 32px);
+}
+.way:hover::before {
+  transform: none;
+}
+/* The number is the loud part: hollow, oversized, tucked into the corner. It fills in on
+   hover. Colour is a paint-time change, but only on the hover itself. */
+.way__n {
+  display: block;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(96px, 9.5vw, 156px);
+  line-height: 0.8;
+  letter-spacing: -0.05em;
+  color: transparent;
+  -webkit-text-stroke: 1.4px hsl(var(--hue) 80% 70% / 0.7);
+  transition: color 0.5s ease;
+  margin-left: -0.04em;
+}
+.way:hover .way__n {
+  color: hsl(var(--hue) 80% 70% / 0.16);
+}
+.way__title {
+  margin-top: 26px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(24px, 2.2vw, 34px);
+  line-height: 1.05;
+  letter-spacing: -0.015em;
+  color: var(--violet-100);
+}
+.way__body {
+  margin-top: 14px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-muted);
+  max-width: 34ch;
+}
+
+/* ── 02 · by the numbers ────────────────────────────────────────────────────── */
+.numbers {
+  padding-top: clamp(56px, 8vh, 96px);
+}
+.big {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 32px;
+  margin-top: clamp(20px, 3vh, 36px);
+}
+.big__value {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(54px, 10.4vw, 168px);
+  line-height: 0.9;
+  letter-spacing: -0.045em;
+  color: var(--violet-200);
+  font-variant-numeric: tabular-nums;
+  margin-left: -0.03em;
+}
+.big__label {
+  font-family: var(--font-tech);
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(192, 132, 252, 0.7);
+}
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0 24px;
+  margin-top: clamp(28px, 4vh, 48px);
+}
+.stat {
+  padding-top: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.09);
+  /* Each column arrives a beat after the last. */
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 0.7s ease, transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+  transition-delay: calc(140ms + var(--i, 0) * 90ms);
+}
+.is-in .stat {
+  opacity: 1;
+  transform: none;
+}
+.stat__value {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(30px, 3.6vw, 56px);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--violet-100);
+}
+.stat__label {
+  margin-top: 10px;
+  font-family: var(--font-tech);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+/* ── 03 · how it is built ───────────────────────────────────────────────────── */
+.how {
+  padding-top: clamp(56px, 8vh, 96px);
+}
+/* A rail: one line drawn across, five nodes on it. The line grows in from the left
+   (scaleX), the nodes drop in one after the other. */
+.rail {
+  list-style: none;
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0 20px;
+  margin-top: clamp(36px, 5vh, 64px);
+  padding-top: 26px;
+}
+.rail__line {
+  position: absolute;
+  top: 4px;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, var(--violet-400), rgba(192, 132, 252, 0.25));
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 1.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.is-in .rail__line {
+  transform: none;
+}
+.node {
+  position: relative;
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 0.6s ease, transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  transition-delay: calc(180ms + var(--i, 0) * 130ms);
+}
+.is-in .node {
+  opacity: 1;
+  transform: none;
+}
+.node__dot {
+  position: absolute;
+  top: -26px;
+  left: 0;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--violet-400);
+  box-shadow: 0 0 12px rgba(192, 132, 252, 0.7);
+  translate: 0 -4px;
+}
+.node__n {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  color: rgba(192, 132, 252, 0.6);
+}
+.node__title {
+  margin-top: 10px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(22px, 2vw, 30px);
+  letter-spacing: -0.015em;
+  color: var(--violet-100);
+}
+.node__body {
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--text-muted);
+}
+
+/* ── End ────────────────────────────────────────────────────────────────────── */
+.end {
+  padding-top: clamp(64px, 9vh, 112px);
+}
+.end__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-top: 22px;
+  border-top: 1px solid var(--line);
+}
+.end__line {
+  font-family: var(--font-display);
+  font-size: clamp(20px, 2vw, 28px);
+  font-style: italic;
+  color: var(--violet-300);
+}
+.end__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 18px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--violet-200);
+  font-family: var(--font-tech);
+  font-size: 11.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.3s;
+}
+.end__back:hover {
+  transform: translateY(-2px);
+  background: rgba(168, 85, 247, 0.12);
+}
+
+/* The name, complete, running off the bottom of the page. Hollow like the far half of the
+   shield; the T alone is solid, and it is the one letter that moves: it falls into the gap. */
+.mark {
+  display: flex;
+  justify-content: center;
+  margin-top: clamp(40px, 6vh, 72px);
+  margin-bottom: -0.2em;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(96px, 19.5vw, 400px);
+  line-height: 0.8;
+  letter-spacing: -0.04em;
+  text-transform: uppercase;
+  color: transparent;
+  -webkit-text-stroke: 1.6px rgba(196, 160, 234, 0.55);
+  pointer-events: none;
+}
+.mark__l {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(0.12em);
+  transition: opacity 0.7s ease, transform 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.mark.is-in .mark__l {
+  opacity: 1;
+  transform: none;
+}
+.mark__l:nth-child(1) { transition-delay: 240ms; }
+.mark__l:nth-child(2) { transition-delay: 180ms; }
+.mark__l:nth-child(3) { transition-delay: 120ms; }
+.mark__l:nth-child(5) { transition-delay: 120ms; }
+.mark__l:nth-child(6) { transition-delay: 180ms; }
+.mark__l:nth-child(7) { transition-delay: 240ms; }
+.mark__l--t {
+  color: var(--violet-200);
+  -webkit-text-stroke: 0;
+  transform: translateY(-0.35em);
+  transition-delay: 520ms;
+  transition-duration: 0.7s, 1.1s;
+}
+
+/* Reveal on first sight: one class toggled by an IntersectionObserver. Children with --i
+   take a small stagger so a row arrives as a wave rather than a block. */
+.reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 0.7s ease, transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  transition-delay: calc(var(--i, 0) * 90ms);
+}
+.reveal.is-in {
+  opacity: 1;
+  transform: none;
+}
+/* The mark has its own per-letter motion; the box itself just needs to exist. */
+.mark.reveal {
+  transform: none;
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .line__in,
+  .stat,
+  .node,
+  .rail__line,
+  .mark__l {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .opening__row {
+    grid-template-columns: 1fr;
+  }
+  .opening__lead {
+    grid-column: 1;
+  }
+  .chapter__note {
+    display: none;
+  }
+  .ways__grid {
+    grid-template-columns: 1fr;
+  }
+  .way,
+  .way + .way {
+    padding-left: 0;
+    border-left: none;
+    border-top: 1px solid rgba(168, 85, 247, 0.14);
+  }
+  .way + .way::before {
+    left: 0;
+  }
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px 20px;
+  }
+  /* The rail stands up: a line down the left, nodes stacked beside it. */
+  .rail {
+    grid-template-columns: 1fr;
+    gap: 28px;
+    padding-top: 0;
+    padding-left: 26px;
+  }
+  .rail__line {
+    top: 0;
+    bottom: 0;
+    left: 4px;
+    right: auto;
+    width: 1px;
+    height: auto;
+    background: linear-gradient(180deg, var(--violet-400), rgba(192, 132, 252, 0.25));
+    transform: scaleY(0);
+    transform-origin: top;
+  }
+  .node__dot {
+    top: 4px;
+    left: -26px;
+    translate: 0 0;
+  }
+}

@@ -1,0 +1,536 @@
+.landing {
+  position: fixed;
+  inset: 0;
+  /* The header is a 3-up space-between row; without this an overflowing pill stretches the
+     frame and drags the whole composition off-centre on narrow screens. */
+  overflow: hidden;
+  z-index: 50; /* above .choose at rest; the choose screen rises above this while the rift opens */
+  padding: 16px;
+  display: flex;
+  /* The wall behind the shield: plain and dark so the pane reads as glass against it. The
+     glass itself lives in <ShieldFrame />. */
+  background: linear-gradient(180deg, #0a0710 0%, #07050c 45%, #040207 100%);
+  transform-origin: var(--warp-x, 50%) var(--warp-y, 50%);
+  /* No will-change at rest. It used to promise transform, filter AND opacity, which forced a
+     permanent render surface for a screen that spends 99% of its life standing still. */
+}
+
+/* The pull. Three things happen on the one --warp-duration clock, timed against the marks
+   in lib/rift.ts (the crack snaps open for the first 28%, then the pull ramps in cubically):
+
+   - the landing itself is dragged toward the crack — scale up about its centre with a
+     slight roll, dimming as it goes; you are being taken, not watching;
+   - Raven recoils, loses her footing and is drawn in, shrinking and spinning into the seam.
+     She is NOT animated here: the choose screen sits above the landing while the crack
+     opens, so a DOM Raven would be cut by the hole she is supposed to be guarding. The
+     reveal canvas draws her instead, above the hole, from the box she had at the click;
+     the DOM copy just hides.
+
+   Transform and opacity only, so it all runs on the compositor while the canvas is busy. */
+.landing.is-warping {
+  animation: landing-pulled var(--warp-duration) cubic-bezier(0.6, 0, 0.9, 0.35) forwards;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+/* Scrolled fully under the about panel: nothing to see, so paint nothing. */
+.landing.is-covered {
+  visibility: hidden;
+}
+
+.landing.is-warping .rift {
+  /* The reveal overlay takes over drawing the seam on the click frame. */
+  opacity: 0;
+}
+.landing.is-warping .raven {
+  opacity: 0;
+}
+
+@keyframes landing-pulled {
+  0% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+  45% {
+    transform: scale(1.03) rotate(-0.3deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.4) rotate(-3deg);
+    opacity: 0.2;
+  }
+}
+
+
+.landing__glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+.landing__glow-wide,
+.landing__glow-core {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  border-radius: 50%;
+}
+.landing__glow-wide {
+  width: min(750px, 90vw);
+  height: min(750px, 90vw);
+  /* Paint-time only: a radial gradient that already fades to nothing. The blur(40px) this
+     used to carry was re-applied by the compositor on every frame the canvas ticked. */
+  background: radial-gradient(
+    circle,
+    rgba(168, 85, 247, 0.055) 0%,
+    rgba(120, 44, 190, 0.03) 30%,
+    rgba(92, 26, 160, 0.015) 52%,
+    transparent 64%
+  );
+}
+.landing__glow-core {
+  width: min(420px, 60vw);
+  height: min(420px, 60vw);
+  background: radial-gradient(
+    circle,
+    rgba(224, 93, 255, 0.045) 0%,
+    rgba(224, 93, 255, 0.02) 35%,
+    transparent 60%
+  );
+}
+
+/* The crack she guards: above the stars, below the HUD frame (and so below Raven, who sits
+   inside it). Full-viewport so its coordinates match the launch origin. */
+.rift {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 6;
+}
+
+/* ── HUD frame ─────────────────────────────────────────────────────────────── */
+.hud-frame {
+  position: relative;
+  z-index: 10;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border-radius: 14px;
+  padding: clamp(14px, 2vw, 28px);
+  min-height: 0;
+  /* No border or fill of its own: the frame IS Raven's shield, drawn by <ShieldFrame /> as a
+     static SVG behind the content — pane, chipped rim, fractures and shards. See shield.ts. */
+}
+.shield {
+  position: absolute;
+  /* Reaches past the frame box so shards can float outside the rim. Keep in step with
+     MARGIN in ShieldFrame.tsx. */
+  inset: -16px;
+  width: calc(100% + 32px);
+  height: calc(100% + 32px);
+  pointer-events: none;
+  /* Below the frame's content, above the canvases: .hud-frame is a stacking context. */
+  z-index: -1;
+}
+
+.landing__header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-width: 0;
+  z-index: 30;
+}
+.landing__header .hud-pill {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.landing__header-center {
+  letter-spacing: 0.18em;
+}
+
+/* ── Central stage ─────────────────────────────────────────────────────────── */
+.stage {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+}
+
+.wordmark {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 clamp(8px, 4vw, 64px);
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 10;
+}
+.wordmark__half {
+  position: relative;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(88px, 18vw, 19vw);
+  line-height: 0.8;
+  letter-spacing: -0.04em;
+  text-transform: uppercase;
+  opacity: 0.95;
+}
+/* The halo lives on a pseudo-element BEHIND the glyphs as a text-shadow, which is painted
+   once into the raster tile. The drop-shadow() filter it replaces was a 35px blur pass run
+   by the compositor on every frame. It cannot be a text-shadow on the gradient text itself:
+   the background-clip:text fill paints before the text phase, so the shadow would land on
+   top of the gradient and wash it out. */
+.wordmark__half::before {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  color: transparent;
+  /* The letters are inline-blocks at line-height 1; match, or the halo sits high. */
+  line-height: 1;
+  text-shadow: 0 0 35px rgba(196, 160, 234, 0.4);
+}
+.wordmark__letter {
+  display: inline-block;
+  line-height: 1;
+  /* Percentages in the clip-paths below are of this box; with line-height 1 the capitals
+     sit at roughly 12%–82% of it in Bodoni, and the polygons reach past the box on the
+     sides that are not chipped so nothing is clipped by accident. */
+}
+/* Stepped along the old gradient: light at the outer edges, deepening toward the rift.
+   `--ink` is read by RiftCanvas too, to colour the fragments that fell off each letter. */
+.wordmark__half--left .wordmark__letter:nth-child(1) { --ink: #dec4f7; }
+.wordmark__half--left .wordmark__letter:nth-child(2) { --ink: #d1b3f0; }
+.wordmark__half--left .wordmark__letter:nth-child(3) { --ink: #c4a0ea; }
+.wordmark__half--right .wordmark__letter:nth-child(1) { --ink: #ad7cdb; }
+.wordmark__half--right .wordmark__letter:nth-child(2) { --ink: #c9a7ed; }
+.wordmark__half--right .wordmark__letter:nth-child(3) { --ink: #dec4f7; }
+.wordmark__half--left .wordmark__letter { color: var(--ink); }
+/* HOS is hollow: the far half is already half gone, and the lattice shows through it. */
+.wordmark__half--right .wordmark__letter {
+  color: transparent;
+  -webkit-text-stroke: 1.6px var(--ink);
+}
+.wordmark__half--right::before { opacity: 0.55; }
+
+/* The letters beside the rift lean into it: the pull is on them too. Kept in a variable
+   so the jump animation can start from the resting pose instead of snapping upright. */
+.wordmark__letter { transform: var(--rest, none); }
+.wordmark__letter--n { --rest: skewX(-7deg) translateX(3%); }
+.wordmark__letter--h { --rest: skewX(7deg) translateX(-3%); }
+
+/* On the jump the word goes after her: the letters nearest the seam first, each one
+   pulled along its own vector (set on the click), shrinking as it goes. Transform and
+   opacity only. */
+.wordmark__letter--n,
+.wordmark__letter--h { --pull-delay: 0ms; }
+.wordmark__letter:nth-child(2) { --pull-delay: 70ms; }
+.wordmark__letter--z,
+.wordmark__letter--s { --pull-delay: 140ms; }
+.landing.is-warping .wordmark__letter {
+  animation: letter-pulled calc(var(--warp-duration) * 0.5) cubic-bezier(0.7, 0, 1, 0.55) forwards;
+  animation-delay: calc(var(--warp-duration) * 0.3 + var(--pull-delay, 0ms));
+  will-change: transform, opacity;
+}
+.landing.is-warping .wordmark__half::before {
+  opacity: 0;
+  transition: opacity 250ms ease-out calc(var(--warp-duration) * 0.3);
+}
+@keyframes letter-pulled {
+  from {
+    transform: var(--rest, none);
+    opacity: 1;
+  }
+  to {
+    transform: translate(var(--to-x, 0px), var(--to-y, 0px)) rotate(35deg) scale(0.04);
+    opacity: 0.2;
+  }
+}
+
+/* Hits. Same damage language as the shield: a corner sheared off, bites, a nick. */
+.wordmark__letter--z {
+  clip-path: polygon(-10% -10%, 77% -10%, 83% 4%, 91% 9%, 98% 17%, 110% 26%, 110% 110%, -10% 110%);
+}
+.wordmark__letter--n {
+  clip-path: polygon(-10% -10%, 38% -10%, 44% 20%, 49% -10%, 110% -10%, 110% 110%, -10% 110%);
+}
+.wordmark__letter--o {
+  clip-path: polygon(-10% -10%, 110% -10%, 110% 44%, 88% 50%, 104% 56%, 110% 62%, 110% 110%, -10% 110%);
+}
+.wordmark__letter--s {
+  clip-path: polygon(-10% -10%, 110% -10%, 110% 110%, 34% 110%, 26% 94%, 14% 88%, -10% 82%);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+
+.raven {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  will-change: transform;
+}
+
+.raven__t {
+  position: absolute;
+  left: 50%;
+  /* Crossbar on her arms. In Bodoni the cap top sits ~12% into a 1em line box, so the
+     translate lifts the glyph until its top is at `top`. */
+  top: calc(var(--raven-h, 480px) * 0.09);
+  font-family: var(--font-display);
+  font-weight: 700;
+  /* A fifth larger than she is tall: the crossbar clears the orbs and the stem's edges show
+     either side of her legs. At exactly her size she hides it completely. */
+  font-size: calc(var(--raven-h, 480px) * 1.22);
+  line-height: 1;
+  color: rgba(216, 180, 254, 0.04);
+  -webkit-text-stroke: 1.8px rgba(216, 180, 254, 0.5);
+  transform-origin: 50% 14%;
+  /* Leans with the crack: its stem is the seam. */
+  transform: translate(-50%, -12%) rotate(12deg);
+  pointer-events: none;
+  user-select: none;
+  opacity: 0.8;
+  transition: opacity 0.6s ease;
+}
+.raven:hover .raven__t {
+  opacity: 1;
+}
+
+.raven__button {
+  position: relative;
+  display: block;
+  border-radius: 50%;
+  animation: float 6s ease-in-out infinite;
+  transition: transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.raven__button:hover {
+  transform: scale(1.03);
+}
+.raven__button:focus-visible {
+  outline: 2px solid var(--violet-300);
+  outline-offset: 12px;
+}
+/* The pointer down-state is the wind-up for the jump: she compresses, then the warp
+   animation takes over from a body that is already loaded. */
+.raven__button:active {
+  transform: scale(0.97);
+  transition-duration: 0.12s;
+}
+
+.raven__figure {
+  display: block;
+  width: clamp(260px, 32vw, 490px);
+  max-height: 64vh;
+  object-fit: contain;
+  /* No drop-shadow() here: she floats and evades, so a filter on her re-ran every frame.
+     The violet halo comes from the rift's light bleed behind her and the ground shadow below. */
+  -webkit-user-drag: none;
+}
+
+.raven__hint {
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  translate: -50% 0;
+  font-family: var(--font-tech);
+  font-size: 10px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: rgba(216, 180, 254, 0.85);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+}
+.raven__button:hover .raven__hint,
+.raven__button:focus-visible .raven__hint {
+  opacity: 1;
+}
+
+.raven__shadow {
+  width: clamp(180px, 18vw, 260px);
+  height: 26px;
+  margin-top: -14px;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(59, 7, 100, 0.75) 0%,
+    rgba(59, 7, 100, 0.35) 45%,
+    transparent 72%
+  );
+  animation: float-shadow 6s ease-in-out infinite;
+}
+
+@keyframes float-shadow {
+  0%,
+  100% {
+    scale: 1;
+    opacity: 0.5;
+  }
+  50% {
+    scale: 0.82;
+    opacity: 0.25;
+  }
+}
+
+/* ── Copy blocks ───────────────────────────────────────────────────────────── */
+.pitch {
+  position: absolute;
+  left: 0;
+  bottom: clamp(8px, 4vh, 48px);
+  max-width: 390px;
+  z-index: 25;
+}
+.pitch__body {
+  font-size: clamp(12px, 1vw, 14px);
+  line-height: 1.7;
+  color: rgba(237, 224, 255, 0.72);
+  letter-spacing: 0.02em;
+  margin-bottom: 14px;
+}
+
+.cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 20px;
+  border-radius: 12px;
+  background: linear-gradient(90deg, #2c0f4d, #4c167d);
+  border: 1px solid rgba(168, 85, 247, 0.6);
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.35);
+  font-family: var(--font-tech);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--violet-100);
+  transition:
+    box-shadow 0.3s ease,
+    border-color 0.3s ease,
+    transform 0.3s ease;
+}
+.cta:hover {
+  box-shadow: 0 0 30px rgba(230, 0, 126, 0.5);
+  border-color: rgba(236, 72, 153, 0.8);
+  color: #fff;
+  transform: scale(1.02);
+}
+.cta:active {
+  transform: scale(0.98);
+}
+
+.tagline {
+  position: absolute;
+  right: 0;
+  bottom: clamp(24px, 8vh, 80px);
+  text-align: right;
+  z-index: 25;
+  pointer-events: none;
+  font-family: var(--font-tech);
+  font-size: 11px;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  line-height: 1.9;
+}
+.tagline p:first-child {
+  color: rgba(216, 180, 254, 0.8);
+}
+.tagline p:last-child {
+  color: rgba(192, 132, 252, 0.6);
+}
+
+/* ── Footer telemetry ──────────────────────────────────────────────────────── */
+.landing__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  z-index: 30;
+  font-family: var(--font-tech);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(192, 132, 252, 0.65);
+}
+.landing__footer-left {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: color 0.3s;
+}
+.landing__footer-left:hover {
+  color: var(--violet-200);
+}
+.landing__footer-center {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  letter-spacing: 0.22em;
+  color: rgba(192, 132, 252, 0.5);
+}
+.landing__footer-center i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(192, 132, 252, 0.8);
+}
+.landing__footer-right b {
+  color: rgba(168, 85, 247, 0.6);
+  font-weight: 400;
+  margin: 0 4px;
+}
+
+@media (max-width: 900px) {
+  .landing__header .landing__header-center,
+  .landing__footer .landing__footer-center,
+  .tagline {
+    display: none;
+  }
+  .pitch {
+    max-width: 260px;
+  }
+}
+
+@media (max-width: 640px) {
+  .landing__footer .landing__footer-right {
+    display: none;
+  }
+  /* Only the live-count pill survives; two pills cannot share 420px without truncating. */
+  .landing__header .hud-pill:last-child {
+    display: none;
+  }
+  .wordmark__half {
+    opacity: 0.55;
+  }
+}
+
+/* Flash, lit edges and inbound debris for the rift. Sits above the choose screen (which
+   rises to 55 while the rift opens) so the edge light is drawn on the tear, not under it. */
+.rift-reveal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  pointer-events: none;
+}

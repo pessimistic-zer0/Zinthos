@@ -1,0 +1,194 @@
+/* ── Zinthos design tokens ────────────────────────────────────────────────────
+   Lifted from the Stitch mockups so the built page and the comps stay in sync.
+   Anything added later should reach for these rather than inventing a new violet. */
+:root {
+  --bg: #0c0814;
+  --bg-deep: #07040f;
+  --surface: #150e22;
+  --surface-raised: #1b1228;
+
+  --violet-100: #ede0ff;
+  --violet-200: #dec4f7;
+  --violet-300: #c4a0ea;
+  --violet-400: #c084fc;
+  --violet-500: #a855f7;
+  --violet-700: #5c1aa0;
+
+  --magenta: #ff2a9d;
+  --magenta-dim: #e6007e;
+
+  --text: #e7e0ef;
+  --text-muted: #cfc2d6;
+  --text-faint: #988d9f;
+
+  --line: rgba(168, 85, 247, 0.22);
+  --line-strong: rgba(168, 85, 247, 0.45);
+
+  --font-display: 'Bodoni Moda', 'Playfair Display', serif;
+  --font-body: 'Manrope', system-ui, sans-serif;
+  --font-tech: 'Space Grotesk', ui-monospace, monospace;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* Rift choreography — one source of truth, read by both CSS and JS.
+     Change the number here and the reveal canvas, Raven's pull, the landing's drag and the
+     matrix's settle all follow.
+
+     Both screens run on THIS timeline: the crack opens on the choose screen while Raven and
+     the landing are pulled into it, so there is no cut — only a tear that grows until the
+     landing is gone. The outline itself is written per frame to `--rift-clip` on <html> by
+     RiftReveal, so the clip and the edge light share one clock. */
+  --warp-duration: 1350ms;
+
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  user-select: none;
+}
+/* The about panel, while mounted, lets the document scroll. Body's overflow propagates to
+   the viewport (html leaves it visible), so window.scrollY is the truth. */
+body.is-scrollable {
+  overflow-y: auto;
+}
+
+::selection {
+  background: var(--violet-700);
+  color: #fff;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(168, 85, 247, 0.3);
+  border-radius: 3px;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+/* Shared atmosphere layers, used by both screens. */
+.grid-veil {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+  background-size: 48px 48px;
+  pointer-events: none;
+}
+
+/* Her float: used by the hero on the landing and her silhouette on the options page. */
+@keyframes float {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 -14px;
+  }
+}
+
+/* Drifting starfield canvas, used by the landing (full) and the options page (subtle). Fills
+   whichever positioned parent it sits in. */
+.constellation {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 40%,
+    rgba(10, 6, 17, 0.85) 100%
+  );
+  pointer-events: none;
+}
+
+.hud-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(27, 18, 40, 0.8);
+  border: 1px solid var(--line);
+  font-family: var(--font-tech);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.pulse-dot {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--magenta);
+  flex: none;
+}
+.pulse-dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--magenta-dim);
+  animation: ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+@keyframes ping {
+  75%,
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
