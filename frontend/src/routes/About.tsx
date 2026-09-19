@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import ConstellationCanvas from '../components/ConstellationCanvas'
+import { modeById, type ModeKind } from '../lib/modes'
 import '../styles/about.css'
 
-const WAYS = [
+const WAYS: { n: string; hue: number; title: string; body: string; mode: ModeKind }[] = [
   {
     n: '01',
+    mode: 'vibe',
     hue: 278,
     title: 'Search by feeling',
     body:
@@ -12,6 +14,7 @@ const WAYS = [
   },
   {
     n: '02',
+    mode: 'similar',
     hue: 196,
     title: 'Follow the sound',
     body:
@@ -19,6 +22,7 @@ const WAYS = [
   },
   {
     n: '03',
+    mode: 'playlist',
     hue: 326,
     title: 'Build the journey',
     body:
@@ -26,6 +30,7 @@ const WAYS = [
   },
   {
     n: '04',
+    mode: 'library',
     hue: 30,
     title: 'Start from your shelf',
     body:
@@ -35,14 +40,6 @@ const WAYS = [
 
 const TRACKS = 255_000_000
 
-const TICKER = [
-  '255,000,000 tracks',
-  '348,000,000 artist links',
-  '13 audio features',
-  '10-number signatures',
-  'under 100 ms',
-  'search by feel',
-]
 
 /** The two halves of the comparison: what had to be handled, and what it ran on. */
 const SCALE = [
@@ -79,6 +76,110 @@ function N({ children }: { children: React.ReactNode }) {
   return <span className="fig">{children}</span>
 }
 
+/**
+ * The band under the hero: the four things you could actually type, typed out in turn.
+ *
+ * The phrases are the console's own placeholders rather than a copy of them, so the band
+ * cannot drift out of step with what the app really accepts. It runs on chained timeouts
+ * (not rAF) and only while it is on screen, and it writes to one text node, so the cost is
+ * a text mutation every few frames rather than a repaint.
+ */
+const PROMPTS = WAYS.map((w) => ({ text: modeById(w.mode).placeholder, label: w.title }))
+
+const TYPE_MS = 42
+const ERASE_MS = 16
+const HOLD_MS = 2600
+
+function PromptBand() {
+  const out = useRef<HTMLSpanElement>(null)
+  const label = useRef<HTMLSpanElement>(null)
+  const band = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const node = out.current
+    const host = band.current
+    const tag = label.current
+    if (!node || !host) return
+
+    // Painted before anything observes anything, so the band is never blank: if the observer
+    // never reports (a hidden tab, a browser that throttles it), this is what stays on screen.
+    const first = PROMPTS[0]
+    node.textContent = first?.text ?? ''
+    if (tag) tag.textContent = first?.label ?? ''
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+
+    let timer = 0
+    let onScreen = false
+    let i = 0
+    // Start mid-cycle: the first phrase is already typed, so the run begins with its hold.
+    let ch = first?.text.length ?? 0
+    let typing = false
+
+    const tick = () => {
+      if (!onScreen) return
+      const phrase = PROMPTS[i]?.text ?? ''
+      if (typing) {
+        ch += 1
+        node.textContent = phrase.slice(0, ch)
+        if (ch >= phrase.length) {
+          typing = false
+          timer = window.setTimeout(tick, HOLD_MS)
+          return
+        }
+        timer = window.setTimeout(tick, TYPE_MS)
+        return
+      }
+      ch -= 2
+      if (ch <= 0) {
+        node.textContent = ''
+        ch = 0
+        typing = true
+        i = (i + 1) % PROMPTS.length
+        // The name changes with the phrase it belongs to, not before it.
+        if (tag) tag.textContent = PROMPTS[i]?.label ?? ''
+        timer = window.setTimeout(tick, 360)
+        return
+      }
+      node.textContent = phrase.slice(0, ch)
+      timer = window.setTimeout(tick, ERASE_MS)
+    }
+
+    const io = new IntersectionObserver(([e]) => {
+      const now = !!e?.isIntersecting
+      if (now === onScreen) return
+      onScreen = now
+      host.classList.toggle('is-live', now)
+      if (now) timer = window.setTimeout(tick, 420)
+      else window.clearTimeout(timer)
+    })
+    io.observe(host)
+
+    return () => {
+      io.disconnect()
+      window.clearTimeout(timer)
+    }
+  }, [])
+
+  return (
+    <div className="band" ref={band}>
+      <div className="band__inner">
+        <span className="band__label">You could say</span>
+        <span className="band__prompt" aria-hidden="true">
+          <span className="band__text" ref={out} />
+          <i className="band__caret" />
+        </span>
+        {/* Which door the phrase belongs to. Pinned to the far edge rather than trailing the
+            text, which would slide left and right all the way through every keystroke. */}
+        <span className="band__for" aria-hidden="true" ref={label} />
+        {/* Spoken once and whole, rather than one letter at a time. */}
+        <span className="sr-only">
+          For example: {PROMPTS.map((pr) => `${pr.text} (${pr.label})`).join('; ')}.
+        </span>
+      </div>
+    </div>
+  )
+}
+
 /** 1.8s brief pause so people can read the hero text before continuing */
 const PAUSE_DURATION = 200
 
@@ -87,15 +188,13 @@ const PAUSE_DURATION = 200
  *
  * A normal-flow section one viewport down, above the fixed landing in z-order, so scrolling
  * slides it up over her. Big type, hairlines and air; nothing paints per frame except the
- * ticker (one transform) and a one-off count-up on the big number. Sections reveal on first
+ * prompt band (one text node) and a one-off count-up on the big number. Sections reveal on first
  * sight through one IntersectionObserver that toggles a class.
  */
 export default function About() {
   const root = useRef<HTMLElement>(null)
   const big = useRef<HTMLParagraphElement>(null)
 
-  const [isPaused, setIsPaused] = useState(false)
-  const [hasPaused, setHasPaused] = useState(false)
   /** The sky fades in once the page has actually slid up over the landing, and back out
       when the rift is the whole view again. */
   const [skyOn, setSkyOn] = useState(false)
@@ -134,7 +233,6 @@ export default function About() {
   const triggerPause = useCallback(() => {
     if (hasPausedRef.current || isPausedRef.current) return
     isPausedRef.current = true
-    setIsPaused(true)
 
     if (pauseTimerRef.current !== null) {
       window.clearTimeout(pauseTimerRef.current)
@@ -142,8 +240,6 @@ export default function About() {
     pauseTimerRef.current = window.setTimeout(() => {
       isPausedRef.current = false
       hasPausedRef.current = true
-      setIsPaused(false)
-      setHasPaused(true)
       pauseTimerRef.current = null
     }, PAUSE_DURATION)
   }, [])
@@ -160,8 +256,6 @@ export default function About() {
     isPausedRef.current = false
     hasPausedRef.current = false
     isTransitioningRef.current = false
-    setIsPaused(false)
-    setHasPaused(false)
   }, [])
 
   // If page is loaded or refreshed already past hero, mark as having paused
@@ -169,7 +263,6 @@ export default function About() {
     const heroTop = getHeroTop()
     if (window.scrollY > heroTop + 50) {
       hasPausedRef.current = true
-      setHasPaused(true)
     }
   }, [getHeroTop])
 
@@ -182,7 +275,6 @@ export default function About() {
       // Rearm if back at landing top
       if (scrollY <= 10 && e.deltaY < 0) {
         hasPausedRef.current = false
-        setHasPaused(false)
       }
 
       // Scrolling DOWN
@@ -354,7 +446,6 @@ export default function About() {
       if (scrollY <= 10) {
         if (hasPausedRef.current) {
           hasPausedRef.current = false
-          setHasPaused(false)
         }
         isTransitioningRef.current = false
       }
@@ -416,16 +507,8 @@ export default function About() {
     )
     items.forEach((i) => io.observe(i))
 
-    // The ticker only moves while it is on screen.
-    const ticker = el.querySelector<HTMLElement>('.ticker')
-    const live = ticker
-      ? new IntersectionObserver(([e]) => ticker.classList.toggle('is-live', !!e?.isIntersecting))
-      : null
-    if (ticker && live) live.observe(ticker)
-
     return () => {
       io.disconnect()
-      live?.disconnect()
     }
   }, [])
 
@@ -486,29 +569,11 @@ export default function About() {
           <p className="chapter reveal">
             <span className="chapter__n">00</span>
             <span className="chapter__name">What this is</span>
-            <span className={`chapter__note${isPaused ? ' is-paused' : ''}`}>
-              {isPaused && <span className="chapter__note-dot" />}
-              {isPaused ? 'Reading' : 'Scroll'}
-            </span>
           </p>
           <h2 className="opening__title reveal" id="about-title">
             <Lines lines={['Music,', 'before', 'the name.']} hollowFrom={1} />
           </h2>
           <div className="opening__row reveal">
-            <div className="opening__indicator" aria-hidden="true">
-              {isPaused ? (
-                <span className="hud-pill opening__badge">
-                  <span className="pulse-dot" /> Brief pause · Read text
-                </span>
-              ) : hasPaused ? (
-                <span className="hud-pill opening__badge is-ready">
-                  <span>Scroll to continue</span>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="6 9 12 15 18 9" />
-                  </svg>
-                </span>
-              ) : null}
-            </div>
             <p className="opening__lead">
               Zinthos is a search engine over 255 million tracks. You do not need a name or a
               tag. Describe a sound or a mood and it finds the music that matches, then keeps
@@ -518,21 +583,7 @@ export default function About() {
         </header>
       </div>
 
-      {/* The band: the numbers, drifting. One transform on one element. */}
-      <div className="ticker" aria-hidden="true">
-        <div className="ticker__track">
-          {[0, 1].map((copy) => (
-            <span className="ticker__set" key={copy}>
-              {TICKER.map((t) => (
-                <span className="ticker__item" key={t}>
-                  {t}
-                  <i />
-                </span>
-              ))}
-            </span>
-          ))}
-        </div>
-      </div>
+      <PromptBand />
 
       <div className="about__col">
         {/* 01 — four ways in */}
@@ -649,7 +700,6 @@ export default function About() {
         <footer className="end">
           <div className="end__row reveal">
             <p className="end__line">She is still guarding it.</p>
-            <span className="about__sig">Zinthos Archive // 255M indexed</span>
             <button type="button" className="ghost-btn end__back" onClick={backToTop}>
               <span>Back to the rift</span>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">

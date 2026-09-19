@@ -135,21 +135,16 @@
   z-index: -1;
 }
 
-.landing__header {
+/* ── Top bar: the source link, and nothing else ────────────────────────────── */
+.landing__top {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
+  justify-content: flex-start;
   min-width: 0;
   z-index: 30;
 }
-.landing__header .hud-pill {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.landing__header-center {
-  letter-spacing: 0.18em;
+/* An anchor wearing the shared button: only the underline has to be undone. */
+.landing__gh {
+  text-decoration: none;
 }
 
 /* ── Central stage ─────────────────────────────────────────────────────────── */
@@ -344,26 +339,6 @@
   -webkit-user-drag: none;
 }
 
-.raven__hint {
-  position: absolute;
-  left: 50%;
-  bottom: -6px;
-  translate: -50% 0;
-  font-family: var(--font-tech);
-  font-size: 10px;
-  letter-spacing: 0.3em;
-  text-transform: uppercase;
-  color: rgba(216, 180, 254, 0.85);
-  white-space: nowrap;
-  opacity: 0;
-  transition: opacity 0.4s ease;
-  pointer-events: none;
-}
-.raven__button:hover .raven__hint,
-.raven__button:focus-visible .raven__hint {
-  opacity: 1;
-}
-
 .raven__shadow {
   width: clamp(180px, 18vw, 260px);
   height: 26px;
@@ -449,11 +424,14 @@
   text-transform: uppercase;
   line-height: 1.9;
 }
-.tagline p:first-child {
-  color: rgba(216, 180, 254, 0.8);
+.tagline p:nth-child(1) {
+  color: rgba(216, 180, 254, 0.9);
 }
-.tagline p:last-child {
-  color: rgba(192, 132, 252, 0.6);
+.tagline p:nth-child(2) {
+  color: rgba(216, 180, 254, 0.72);
+}
+.tagline p:nth-child(3) {
+  color: rgba(192, 132, 252, 0.55);
 }
 
 /* ── Footer telemetry ──────────────────────────────────────────────────────── */
@@ -484,17 +462,8 @@
   color: var(--violet-200);
 }
 .landing__footer-center {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
   letter-spacing: 0.22em;
   color: rgba(192, 132, 252, 0.5);
-}
-.landing__footer-center i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: rgba(192, 132, 252, 0.8);
 }
 .landing__footer-right b {
   color: rgba(168, 85, 247, 0.6);
@@ -503,7 +472,6 @@
 }
 
 @media (max-width: 900px) {
-  .landing__header .landing__header-center,
   .landing__footer .landing__footer-center,
   .tagline {
     display: none;
@@ -514,11 +482,14 @@
 }
 
 @media (max-width: 640px) {
-  .landing__footer .landing__footer-right {
+  /* The mark alone at this width; the word would crowd the frame's corner. */
+  .landing__gh-text {
     display: none;
   }
-  /* Only the live-count pill survives; two pills cannot share 420px without truncating. */
-  .landing__header .hud-pill:last-child {
+  .landing__gh {
+    padding: 7px 9px;
+  }
+  .landing__footer .landing__footer-right {
     display: none;
   }
   .wordmark__half {

@@ -79,9 +79,13 @@ interface Props {
       collage swallows faint stars, so they need more alpha to read the same. Scales
       brightness, count and the cursor web together. */
   intensity?: number
+  /** scene.covered switches the landing's loops off while the about panel is over it. The
+      about page's own sky lives under that same flag, so it opts out of the pause and keeps
+      drawing. */
+  alwaysOn?: boolean
 }
 
-export default function ConstellationCanvas({ intensity = 1 }: Props) {
+export default function ConstellationCanvas({ intensity = 1, alwaysOn = false }: Props) {
   const ref = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
@@ -138,7 +142,7 @@ export default function ConstellationCanvas({ intensity = 1 }: Props) {
 
     let frame = 0
     const render = () => {
-      if (scene.covered) {
+      if (!alwaysOn && scene.covered) {
         frame = requestAnimationFrame(render)
         return
       }
@@ -211,7 +215,7 @@ export default function ConstellationCanvas({ intensity = 1 }: Props) {
       cancelAnimationFrame(frame)
       window.removeEventListener('resize', resize)
     }
-  }, [intensity])
+  }, [intensity, alwaysOn])
 
   return <canvas className="constellation" ref={ref} aria-hidden="true" />
 }
