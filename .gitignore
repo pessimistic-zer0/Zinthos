@@ -55,3 +55,9 @@ backend/local_library.md
 backend/test_llm.py
 model_training/F6_design_decisions.md
 model_training/F6_implementation_plan.md
+
+.claude/
+Release Album Track Mapping-2026-07-28-201609.png
+Release Album Track Mapping-2026-07-28-201643.png
+database/db_validation_checklist.master_db_builder
+database/implementation_plan_v2.md
