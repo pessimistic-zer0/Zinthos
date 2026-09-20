@@ -62,6 +62,10 @@ GENRE_WORDS: dict[str, int] = {
     "reggae": 17, "rock": 18, "soundtrack": 19, "score": 19,
 }  # note: "dance" intentionally omitted (handled as a mood above, not a genre)
 
+# Words that flip the term after them. Kept out of STOPWORDS: they carry meaning, they just
+# carry it about the NEXT token.
+NEGATORS = {"no", "not", "nothing", "never", "without", "anti", "non", "less", "least"}
+
 STOPWORDS = {
     "a", "an", "the", "for", "to", "of", "and", "or", "with", "in", "on", "some",
     "me", "my", "i", "song", "songs", "music", "track", "tracks", "tune", "tunes",
@@ -90,15 +94,31 @@ def _lookup(term: str) -> list[Predicate] | None:
 
 
 def merge(preds: list[Predicate]) -> list[Predicate]:
-    """Combine same-column predicates: tightest bound wins; first genre/year wins."""
+    """Combine same-column predicates: tightest bound wins; first genre/year wins.
+
+    CONTRADICTIONS RESOLVE IN FAVOUR OF THE LATER PREDICATE.
+      Tightening each direction independently can produce an impossible range, and it did:
+      "rainy 3am drive, warm bass, nothing cheerful" — the app's own placeholder — had the
+      rules parser see the word `cheerful` and emit `valence > 600`, while the LLM read the
+      whole phrase and emitted `valence < 350`. Both survived the merge and the query matched
+      zero rows out of 52.5M.
+
+      search.py calls this as merge(rules_preds + llm_preds), so "later" means the LLM, which
+      saw the phrase rather than a bag of words. When a new bound would empty a column's
+      range, the opposing bound is dropped rather than both being kept.
+    """
     lt: dict[str, int] = {}
     gt: dict[str, int] = {}
     eq: dict[str, int] = {}
     for col, op, val in preds:
         if op == "<":
             lt[col] = min(lt.get(col, val), val)
+            if col in gt and gt[col] >= lt[col]:
+                del gt[col]
         elif op == ">":
             gt[col] = max(gt.get(col, val), val)
+            if col in lt and lt[col] <= gt[col]:
+                del lt[col]
         else:
             eq.setdefault(col, val)
     return ([(c, "<", v) for c, v in lt.items()]
@@ -113,6 +133,16 @@ def parse(query: str) -> ParseResult:
 
     i = 0
     while i < len(toks):
+        # A negated term is SKIPPED, not inverted. "nothing cheerful" must not read as
+        # "cheerful" (it did), but inverting `valence > 600` into a bound is a guess about
+        # how negative the user meant — so the rules decline the term, coverage drops, and
+        # the LLM gets asked. Not counted as matched, which is what makes coverage honest.
+        if toks[i] in NEGATORS and i + 1 < len(toks):
+            # Bounds check BEFORE the lookup: the negated term can be the last token.
+            negated_bigram = (i + 2 < len(toks)
+                              and _lookup(toks[i + 1] + toks[i + 2]) is not None)
+            i += 3 if negated_bigram else 2
+            continue
         bigram = toks[i] + toks[i + 1] if i + 1 < len(toks) else None
         hit = _lookup(bigram) if bigram else None
         if hit is not None:
