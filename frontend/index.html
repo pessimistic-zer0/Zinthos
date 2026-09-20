@@ -9,7 +9,19 @@
       content="Zinthos — search 255 million tracks by how they sound and feel."
     />
     <title>Zinthos — A different way to listen</title>
-    <link rel="icon" href="/assets/raven-hero.png" />
+    <!-- The hero art was the favicon until now, and at 16px a full-length figure is a
+         smudge. This is the face alone, cropped to its own bbox and padded square, with
+         every size a browser or OS asks for in the one .ico.
+
+         NOT NAMED favicon.ico ON PURPOSE. A Hugging Face static Space special-cases that
+         exact path and serves its OWN icon there, shadowing the file in the repo — the
+         upload succeeds, the repo copy is byte-correct, and the browser still gets
+         Hugging Face's icon. Measured: /favicon.ico came back 205,556 bytes against our
+         74,121, while /apple-touch-icon.png returned ours untouched, so only that one
+         path is claimed. An explicit rel="icon" beats the browser's default probe, so any
+         other name works. -->
+    <link rel="icon" href="/raven.ico" sizes="any" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
