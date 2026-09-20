@@ -10,13 +10,42 @@ The whole pipeline — a 266 GB raw-data ETL, genre classification over 255M row
 
 ## Demo
 
-A public demo runs the same engine over a slice of the catalogue — the full `master.db` is
-162 GB and the FAISS index 9 GB, neither of which fits a free host. No code is forked: the
-slice keeps `master.db`'s track ids and every column the engine reads, and
-[`backend/engine/config.py`](backend/engine/config.py) is pointed at it by environment
-variable. See [`demo/`](demo/) for how it is built and deployed.
+Two clients, one engine. Everything below is live against the full **255M-track** index.
 
-The recordings below are from the full 255M-track index.
+### Web client
+
+The portal: a landing screen you jump *through* into a four-way mode selector, each door
+wired to a real engine endpoint.
+
+![Zinthos web — the landing portal](docs/web-landing.jpg)
+
+![Zinthos web — the four-way mode selector](docs/web-choose.jpg)
+
+Describing a vibe in your own words. `rainy 3am drive, warm bass, nothing cheerful` matches
+almost nothing in the rules vocabulary, so the LLM fallback turns the phrase into feature
+filters and the engine ranks 255M tracks by feel.
+
+![Zinthos web — vibe search](docs/web-vibe.gif)
+
+Naming a track you already know. `Midnight City` / `M83` resolves to the catalogue copies
+first — a pick-list, because a famous song has many — and the chosen one becomes the seed for
+a walk through the learned embedding space.
+
+![Zinthos web — similar by name](docs/web-similar.gif)
+
+Describing an arc rather than a mood. The same filters as vibe search, then ordered so the
+jump between consecutive tracks stays small (tempo, energy, Camelot key, valence).
+
+![Zinthos web — playlist builder](docs/web-playlist.gif)
+
+Starting from what you already own. Paste `Title — Artist` per line, optionally with an ISRC;
+each line is matched to the catalogue — by ISRC exactly, otherwise fuzzily — and every match
+becomes a seed. Retrieval runs inside each seed's own genre family, so a metal shelf comes
+back metal rather than whatever happens to sit near the average of it.
+
+![Zinthos web — local library](docs/web-library.gif)
+
+### Terminal client
 
 Searching by feel — a vibe query (`dark moody instrumental electronic`) returns real tracks; `s` pulls nearest neighbours from the FAISS index ("more like this").
 
@@ -34,7 +63,16 @@ Scanning a local library — point it at a folder of audio files; it reads their
 
 ![Zinthos TUI — local library scan](docs/scan.gif)
 
-> The terminal client talks to the FastAPI engine over JSON; results above are live from the 255M-track index.
+> Both clients talk to the FastAPI engine over JSON and hold no data of their own.
+
+### Try it
+
+A public demo runs the same engine over a **slice** of the catalogue — the full `master.db`
+is 162 GB and the FAISS index 9 GB, neither of which fits a free host. No code is forked: the
+slice keeps `master.db`'s track ids and every column the engine reads, and
+[`backend/engine/config.py`](backend/engine/config.py) is pointed at it by environment
+variable. It says which slice it is serving, live from the engine, rather than claiming the
+whole catalogue. See [`demo/`](demo/) for how it is built and deployed.
 
 ## Architecture
 
@@ -107,9 +145,13 @@ python model_training/build_faiss.py
 # 4. Run the engine (FastAPI, defaults to 127.0.0.1:3000)
 python -m backend.engine.main
 
-# 5. Run the terminal client (separate shell)
-cd tui && cargo run --release
+# 5. Run a client (separate shell)
+cd tui && cargo run --release              # terminal
+cd frontend && npm install && npm run dev  # web, on http://127.0.0.1:5173
 ```
+
+The web client's dev server proxies `/api` to the engine, so the browser stays same-origin;
+point it elsewhere with `SONIC_ENGINE=http://host:port npm run dev`.
 
 Configuration is via environment variables (see [`backend/engine/config.py`](backend/engine/config.py)) and a `backend/.env` file. The LLM fallback reads its provider/key from `.env`; without it, search falls back to the rule-based parser.
 

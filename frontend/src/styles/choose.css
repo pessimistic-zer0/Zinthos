@@ -280,6 +280,51 @@
   color: rgba(207, 194, 214, 0.75);
 }
 
+/* The hosted build's honesty line: this demo searches a slice, not the whole catalogue.
+   Deliberately dimmer and smaller than .choose__desc — it is a caveat, not a headline —
+   and rendered only when VITE_DEMO=1, so the local app never shows it. */
+.choose__note {
+  margin-top: 10px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  letter-spacing: 0.01em;
+  color: rgba(207, 194, 214, 0.48);
+  border-top: 1px solid rgba(168, 85, 247, 0.16);
+  padding-top: 10px;
+
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  text-align: left;
+}
+
+/* The mark, sized to span the whole note rather than to a fixed glyph size: `align-self:
+   stretch` makes the pseudo-element as tall as the text block, and scaleY stretches the
+   glyph to fill it, so it still spans if the copy wraps to three lines on a narrow screen. */
+.choose__note::before {
+  content: '!';
+  flex: none;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  /* NOT --font-display: Bodoni is a didone, and its exclamation stem is a hairline that
+     reads as a thin bar rather than a mark at this size (global.css says as much). The
+     heading face at 700 keeps the stem solid and the dot separate under the stretch. */
+  /* Stem WIDTH tracks font-size and weight; stem HEIGHT tracks font-size and scaleY. So the
+     mark is tuned by trading size against stretch, which holds the span across the two lines
+     constant (0.72 x size x scaleY ~= 35.6px) while the weight decides how heavy it reads.
+     Landed between 700/38px/1.3 (too blunt) and 400/28px/1.78 (too faint). 500 is a real
+     loaded weight — see index.html — not a synthesised one. */
+  font: 500 33px/1 var(--font-heading);
+  transform: scaleY(1.5);
+  /* --violet-200 at 70%. Held back from full strength so the mark leads the eye without
+     shouting — it is a caveat, not an alert. Opacity as its own declaration rather than
+     baked into an rgba(), so the palette token stays the source of the hue. Not --magenta:
+     that is the alert colour elsewhere in the app and would read as an error. */
+  color: var(--violet-200);
+  opacity: 0.7;
+}
+
 /* ── Corner cards ──────────────────────────────────────────────────────────── */
 .option {
   position: absolute;
