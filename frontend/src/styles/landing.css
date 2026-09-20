@@ -1,11 +1,15 @@
 .landing {
   position: fixed;
   inset: 0;
+  /* Notch and home indicator. The frame is a shield with content pressed to its rim, so
+     without this the GitHub button lands under the status bar on a phone. */
+  padding:
+    calc(16px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right))
+    calc(16px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
   /* The header is a 3-up space-between row; without this an overflowing pill stretches the
      frame and drags the whole composition off-centre on narrow screens. */
   overflow: hidden;
   z-index: 50; /* above .choose at rest; the choose screen rises above this while the rift opens */
-  padding: 16px;
   display: flex;
   /* The wall behind the shield: plain and dark so the pane reads as glass against it. The
      glass itself lives in <ShieldFrame />. */
@@ -172,7 +176,14 @@
   position: relative;
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: clamp(88px, 18vw, 19vw);
+  /* The floor used to be 88px, which below ~490px of viewport is wider than the half it
+     has to sit in: ZIN broke to "ZI / N" and HOS to "HO / S", and both piles landed on
+     top of Raven. The word is MEANT to run behind her — that is the composition — but as
+     one line each side, not as four stacked fragments. Hence a floor small enough to stay
+     on one line on a phone, and `nowrap` so it clips at the frame rather than folding if
+     a face ever measures wider than Bodoni does. */
+  font-size: clamp(46px, 18vw, 19vw);
+  white-space: nowrap;
   line-height: 0.8;
   letter-spacing: -0.04em;
   text-transform: uppercase;
@@ -487,13 +498,109 @@
     display: none;
   }
   .landing__gh {
-    padding: 7px 9px;
+    padding: 9px 11px;
   }
   .landing__footer .landing__footer-right {
     display: none;
   }
   .wordmark__half {
     opacity: 0.55;
+  }
+  /* She is the T between the two halves, so she has to leave them somewhere to be. At
+     32vw her floor of 260px took two thirds of a 390px screen and the word had nowhere
+     to go but straight across her face. */
+  .raven__figure {
+    width: clamp(168px, 46vw, 490px);
+    max-height: 46vh;
+  }
+  .raven__shadow {
+    width: clamp(130px, 32vw, 260px);
+  }
+  /* Bottom-left copy and the footer are on the same corner of a phone; give the pitch the
+     full width and let the footer sit under it rather than beside it. */
+  .pitch {
+    max-width: none;
+    right: 0;
+  }
+}
+
+/* ── Portrait phone: the name stacks ───────────────────────────────────────────
+   In landscape the name is laid out ACROSS her — ZIN, her as the T, HOS — and it works
+   because she is roughly a letter's width against the word. In portrait she is not: at
+   390px the word is ~70px tall and she is 180px wide, so the gap she stands in is three
+   letters wide and the halves read as two broken words rather than one name.
+
+   A tall screen wants the name laid out DOWN it instead. ZIN above her, HOS below, and
+   she is still the T in the middle — read top to bottom, the name is whole, and the one
+   idea the landing is built on survives the rotation instead of being worked around.
+
+   She stays vertically centred, which matters for more than looks: riftFromLayout (see
+   lib/rift.ts) puts the crack at the STAGE's centre, not at hers, so anything that moves
+   her off it leaves the crack behind. A symmetric stack — one line above, one line below,
+   one gap each side — keeps her centre and the stage's centre the same point. */
+@media (max-width: 640px) and (orientation: portrait) {
+  .stage {
+    flex-direction: column;
+    justify-content: center;
+    /* Air between the three, traded against the pitch block below: the stack is
+       centred, so every pixel of gap costs half a pixel of clearance at the foot. */
+    gap: clamp(8px, 2.6vh, 28px);
+  }
+  /* The wordmark's own box goes away so its two halves become items of the stage in their
+     own right, which is what lets them be ordered around her. `display: contents` drops
+     the box only — the element stays in the DOM and in the inheritance chain, so anything
+     the halves inherit through it still reaches them. */
+  .wordmark {
+    display: contents;
+  }
+  .wordmark__half--left {
+    order: 1;
+  }
+  .raven {
+    order: 2;
+  }
+  .wordmark__half--right {
+    order: 3;
+  }
+  /* The pitch joins the column too. Left pinned to the stage's bottom edge it does not
+     know the stack is there, and on a short phone the two met: at 360x640 HOS overlapped
+     it by 36px, at 320x568 by 47px. In the flow the gap is the gap, at any height. */
+  .pitch {
+    position: static;
+    order: 4;
+    text-align: center;
+    margin-top: clamp(2px, 1.5vh, 16px);
+  }
+  /* Back to full strength. The 0.55 above is there to stop the word competing with her
+     where it runs BEHIND her; stacked clear of her it is the wordmark again, and half
+     opacity only made it look unfinished. */
+  .wordmark__half {
+    opacity: 0.95;
+    /* Opened up. The -0.04em above is display tracking, set for a word the width of the
+       screen; on three letters at a fifth of that size it just reads cramped.
+       The negative right margin cancels the trailing space letter-spacing adds after the
+       LAST letter, which would otherwise push each line half a space left of the centre
+       the stack is aligned on. */
+    letter-spacing: 0.09em;
+    margin-right: -0.09em;
+  }
+  /* N and H stand up straight.
+     They skew 7deg toward each other everywhere else because the seam is BETWEEN them —
+     they are leaning into it. Stacked, the crack is above HOS and below ZIN, so a sideways
+     lean points at nothing and reads as a wobble in the wordmark. `--rest` is read by the
+     resting transform and by the `letter-pulled` keyframe's start, so clearing it here
+     straightens them without the jump animation snapping upright as it begins. */
+  .wordmark__letter--n,
+  .wordmark__letter--h {
+    --rest: none;
+  }
+  /* She has the width back: nothing sits beside her any more, only above and below. */
+  .raven__figure {
+    width: clamp(180px, 54vw, 420px);
+    max-height: 36vh;
+  }
+  .raven__shadow {
+    width: clamp(130px, 38vw, 300px);
   }
 }
 

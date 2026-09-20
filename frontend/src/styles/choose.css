@@ -473,6 +473,9 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  /* Crop around her eyes, not around the middle of a square frame she does not sit in the
+     middle of. Per-mode, from lib/modes.ts. */
+  object-position: var(--focus-card, 50% 50%);
   filter: saturate(0.9) brightness(0.92);
   transition:
     filter 0.4s ease,
@@ -624,6 +627,65 @@
     flex-wrap: wrap;
     justify-content: center;
     gap: 12px;
+  }
+}
+
+/* Between the corner layout and a phone there is room for two cards abreast, and a single
+   column of four at 1000px is a very long scroll past a lot of empty margin.
+
+   `grid-auto-rows: max-content` is not decoration. A grid container with a DEFINITE height
+   — this one is `position: fixed; inset: 0` — sizes `auto` rows between their min-content
+   and max-content contributions and SHRINKS them when the total does not fit, instead of
+   overflowing. Four card rows never fit a viewport, so the cards would be squeezed rather
+   than scrolled. Pinning the rows to max-content restores the overflow that `overflow-y:
+   auto` above is there to scroll. */
+@media (min-width: 641px) and (max-width: 1100px) {
+  .choose {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: max-content;
+    align-content: start;
+    column-gap: clamp(16px, 3vw, 40px);
+    padding: 0 clamp(16px, 3vw, 40px);
+  }
+  /* The chrome and the centre copy run the full width; only the cards pair up. */
+  .choose__nav,
+  .choose__hud,
+  .choose__footer {
+    grid-column: 1 / -1;
+  }
+  .choose__nav {
+    padding-inline: 0;
+  }
+}
+
+/* ── Phone ─────────────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .choose {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .choose__nav {
+    padding: calc(14px + env(safe-area-inset-top)) 14px 14px;
+  }
+  .choose__hud {
+    margin: 4px auto 24px;
+    padding: 0 16px;
+  }
+  .choose__title {
+    /* The desktop floor of 30px is set against a 460px centre column, not a 358px one. */
+    font-size: clamp(25px, 7vw, 48px);
+    margin: 14px 0 10px;
+  }
+  .polaroid {
+    margin-bottom: 22px;
+  }
+  /* A finger, not a cursor: the tap target is the whole card, but the chip is what reads
+     as the button, so it gets a real one's height. */
+  .polaroid__chip {
+    padding: 12px 0;
+  }
+  .choose__footer {
+    padding: 14px 16px calc(16px + env(safe-area-inset-bottom));
   }
 }
 

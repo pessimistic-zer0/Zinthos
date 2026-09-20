@@ -3,7 +3,7 @@ import type { Phase, WarpOrigin } from '../App'
 import ConstellationCanvas from '../components/ConstellationCanvas'
 import RiftCanvas from '../components/RiftCanvas'
 import ShieldFrame from '../components/ShieldFrame'
-import { riftFromLayout, type RiftGeometry } from '../lib/rift'
+import { layoutBoxIn, riftFromLayout, type RiftGeometry } from '../lib/rift'
 import { trackCursor } from '../lib/cursor'
 import { useRavenEvasion } from '../lib/useRavenEvasion'
 import { scene } from '../lib/scene'
@@ -79,7 +79,7 @@ export default function Landing({ phase, origin, onEnter }: Props) {
     const g =
       rift.current ??
       (s
-        ? riftFromLayout(s, f ? new DOMRect(0, 0, f.offsetWidth, f.offsetHeight) : null)
+        ? riftFromLayout(s, f && stage.current ? layoutBoxIn(f, stage.current, s) : null)
         : { x: window.innerWidth / 2, y: window.innerHeight / 2, len: 400, tilt: -0.21 })
     // Each letter gets its own vector to the seam; the pull keyframes read it back.
     stage.current?.querySelectorAll<HTMLElement>('.wordmark__letter').forEach((el) => {

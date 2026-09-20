@@ -7,9 +7,16 @@
    re-applied on every one of those frames (see frontend/README.md, "Performance rules"). */
 .demo-notice {
   position: fixed;
-  left: 50%;
+  /* Pinned to BOTH edges and centred by auto margins, not by `left: 50%` + a translate.
+     A shrink-to-fit box offset only from the left gets `100% - 50%` of the containing
+     block to fit into, so this was capped at half the viewport whatever `max-width` said:
+     on a phone that made it a 192px tower of five wrapped lines standing on top of the
+     Enter button, and even on a desktop it never used the 640px it was allowed. */
+  left: 16px;
+  right: 16px;
   bottom: 14px;
-  transform: translateX(-50%);
+  width: fit-content;
+  margin-inline: auto;
   z-index: 60;
 
   display: flex;
@@ -67,13 +74,52 @@
   background: rgba(168, 85, 247, 0.16);
 }
 
-@media (max-width: 560px) {
+/* Narrow OR short. A phone in landscape is ~740x390: wide enough to sail past a
+   width-only breakpoint, and far too short to give a floating pill anywhere to float —
+   there it landed across the Enter button and the footer at once. */
+@media (max-width: 640px), (max-height: 520px) {
+  /* A floating pill needs margin on all four sides, and at these sizes there is none to
+     spare. Docked to the bottom edge instead, full width: the same line, two rows instead
+     of five, and a straight edge against the screen rather than a rounded one against a
+     4px gap. */
   .demo-notice {
-    bottom: 8px;
-    padding: 7px 8px 7px 12px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-width: none;
+    margin-inline: 0;
+    border-width: 1px 0 0;
+    border-radius: 0;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
   }
 
   .demo-notice__text {
     font-size: 11.5px;
+  }
+
+  .demo-notice__close {
+    width: 30px;
+    height: 30px;
+  }
+
+  /* It is `position: fixed`, so it covers whatever is at the foot of the screen rather
+     than pushing it up — which was the landing's "scroll to explore" and the matrix's key
+     hints. `:has()` scopes this to the builds that actually render it (VITE_DEMO=1), and
+     it unsticks itself the moment the notice is dismissed and leaves the DOM.
+
+     The reserve is the bar's measured height: two wrapped lines of 11.5px plus its own
+     padding, in landscape. Portrait is narrower and wraps further — see below. */
+  body:has(.demo-notice) .landing__footer,
+  body:has(.demo-notice) .choose__footer {
+    padding-bottom: 62px;
+  }
+}
+
+/* Portrait: the same bar over half the width wraps to three or four lines. */
+@media (max-width: 640px) {
+  body:has(.demo-notice) .landing__footer,
+  body:has(.demo-notice) .choose__footer {
+    padding-bottom: 92px;
   }
 }

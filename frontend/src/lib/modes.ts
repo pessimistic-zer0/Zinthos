@@ -36,6 +36,22 @@ export interface Mode {
   abilities: string[]
   card: string
   full: string
+  /**
+   * Where her eyes are in each piece of art, as an `object-position` pair.
+   *
+   * Every persona frame is square, and nothing that renders one is: the card's photo is
+   * landscape (1 / --photo-ratio), and the console's is a tall column on a desktop and a
+   * short banner on a phone. `object-fit: cover` therefore always crops, and its default
+   * `50% 50%` crops around the middle of the FRAME — which in art where she sits high is
+   * her chest. At the banner heights the stacked console uses, that removed her face from
+   * the picture altogether.
+   *
+   * `object-position: X% Y%` aligns the Y% line of the image with the Y% line of the box,
+   * so passing the eye line keeps it in view at every crop, and the shorter the box gets
+   * the more exactly the eyes fill it. Measured off the art, not guessed — the two 03
+   * values differ because its card and full crops are framed differently.
+   */
+  focus: { card: string; full: string }
   /** Accent hue (CSS hue angle) used for this card's glow and selection state. */
   hue: number
 }
@@ -59,6 +75,7 @@ export const MODES: readonly Mode[] = [
     ],
     card: '/assets/personas/card-01.jpg',
     full: '/assets/personas/full-01.jpg',
+    focus: { card: '47% 27%', full: '47% 27%' },
     hue: 278,
   },
   {
@@ -79,6 +96,7 @@ export const MODES: readonly Mode[] = [
     ],
     card: '/assets/personas/card-02.jpg',
     full: '/assets/personas/full-02.jpg',
+    focus: { card: '55% 52%', full: '55% 52%' },
     hue: 196,
   },
   {
@@ -99,6 +117,7 @@ export const MODES: readonly Mode[] = [
     ],
     card: '/assets/personas/card-03.jpg',
     full: '/assets/personas/full-03.jpg',
+    focus: { card: '46% 36%', full: '46% 33%' },
     hue: 326,
   },
   {
@@ -119,6 +138,7 @@ export const MODES: readonly Mode[] = [
     ],
     card: '/assets/personas/card-04.jpg',
     full: '/assets/personas/full-04.jpg',
+    focus: { card: '43% 50%', full: '43% 50%' },
     hue: 30,
   },
 ]

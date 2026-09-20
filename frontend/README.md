@@ -177,6 +177,46 @@ with two canvases and a floating Raven, it draws every frame. So:
   `drawImage`; the rift fakes glow with wide low-alpha strokes under a thin bright one.
 - No `will-change` at rest; it is set on the landing only while it recedes.
 
+### Small screens
+
+Three breakpoints, and each one exists because something specific broke at it.
+
+- **1100px** — the four corners collide with the centre copy, so the matrix becomes a
+  scrollable stack. Between 641px and 1100px the cards pair up two abreast.
+- **900px** — the query console's two panes stack. Source order puts the persona first,
+  which stacked is ~520px of photo, speech and bullets *above* the only input on the
+  screen. `display: contents` on `.console__persona` dissolves its box so its parts become
+  items of the console in their own right and can be ordered independently: photo and name
+  stay on top, the query and its results come next, the speech and the ability list keep
+  their place below.
+- **640px** — the console goes full-bleed and its close button goes `position: fixed`;
+  Raven gives up width so `ZIN` and `HOS` have somewhere to sit; the demo notice docks to
+  the bottom edge as a bar and the footers reserve room for it (`body:has(.demo-notice)`).
+
+Two traps worth knowing, both of which cost real debugging here:
+
+- **A grid with a definite height shrinks its `auto` rows rather than overflowing.** It
+  sizes them between min-content and max-content and, when the total does not fit, takes
+  the difference out of the rows. A stacked console is `position: fixed` and therefore has
+  a definite height, so the results row collapsed to 428px while holding 3104px of rows and
+  the list spilled over everything below it. Either use a column flex container (the
+  console) or pin the rows with `grid-auto-rows: max-content` (the matrix).
+- **`will-change: transform` establishes a containing block for `position: fixed`
+  descendants**, with or without a transform set — the same as a transform itself does.
+  The console's close button was pinned to the console and scrolled off the top until the
+  hint was cleared at that breakpoint.
+
+`dvh`, not `vh`, wherever the mobile address bar matters: `vh` is measured as though the bar
+were already hidden, so `.about`'s `margin-top: 100vh` left a dead strip under the landing.
+`dvh` agrees with `window.innerHeight`, which is what `Landing.tsx` compares `scrollY`
+against to decide the landing is covered.
+
+Touch is a pointer that cannot hover, so `lib/cursor.ts` ignores anything that is not a
+mouse or a pen. A touch fires `pointermove` too, and `pointerleave` does not fire for a
+finger that simply lifted — so Raven would flinch away from the last tap and stay there for
+the rest of the session. Target sizes key off `@media (hover: none)` rather than a width: a
+phone in landscape is wider than some laptops, and a touchscreen laptop is neither.
+
 ## The four modes
 
 | Card | Mode | Endpoint |

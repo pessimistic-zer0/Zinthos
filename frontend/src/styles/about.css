@@ -7,7 +7,14 @@
 .about {
   position: relative;
   z-index: 60; /* above .landing (50) */
+  /* One viewport down — and on a phone `vh` is not that viewport. `vh` is the LARGE
+     viewport, measured as though the browser's address bar were already hidden, so with
+     the bar showing this panel started ~60-100px below the fold and the landing had a
+     dead strip under it. `dvh` tracks the viewport that is actually on screen, which is
+     also what `window.innerHeight` reports — and Landing.tsx compares `scrollY` against
+     exactly that to decide when the landing is covered. The two now agree. */
   margin-top: 100vh;
+  margin-top: 100dvh;
   padding-top: clamp(64px, 9vh, 112px);
   background: linear-gradient(180deg, #08060d 0%, #050309 45%, #030106 100%);
   color: var(--text);
@@ -110,6 +117,7 @@
 /* ── 00 · the claim ─────────────────────────────────────────────────────────── */
 .opening {
   min-height: calc(100vh - clamp(64px, 9vh, 112px));
+  min-height: calc(100dvh - clamp(64px, 9vh, 112px));
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -604,7 +612,10 @@
   margin-bottom: -0.2em;
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: clamp(96px, 19.5vw, 400px);
+  /* The floor was 96px, at which ZINTHOS measures ~460px and a phone clipped two letters
+     off each end — and `.about` clips rather than scrolls, so they were simply gone. The
+     foot is meant to run off the BOTTOM edge, not the sides. */
+  font-size: clamp(44px, 19.5vw, 400px);
   line-height: 0.8;
   letter-spacing: -0.04em;
   text-transform: uppercase;
@@ -721,7 +732,35 @@
     padding-top: clamp(20px, 3vh, 30px);
     border-top: 1px solid rgba(168, 85, 247, 0.22);
   }
+  /* Undo the mirror as well as the alignment. The catalogue side reverses its rows so its
+     figures end up against the centre rule, which is the whole point of the two columns —
+     but stacked there is no rule to meet, and `row-reverse` with `flex-start` packs to the
+     RIGHT, so that column stayed right-aligned under a left-aligned heading while the
+     machine column below it ran the other way. */
+  .gap__side:not(.gap__side--machine) .gap__row {
+    flex-direction: row;
+  }
   .gap__row {
     justify-content: flex-start;
+  }
+
+  /* The figure stops being a watermark and becomes a figure.
+
+     It is absolutely positioned into the paragraph's right margin, and on a phone there is
+     no right margin — so 255,000,000 sat directly on top of the prose and neither could be
+     read. Back into the flow, above the sentence it belongs to, at full strength: the
+     fading gradient exists to let text cross it, and nothing crosses it here. */
+  .big {
+    position: static;
+    right: auto;
+    margin-bottom: clamp(14px, 2.5vh, 26px);
+  }
+  .big__stack {
+    font-size: clamp(42px, 13vw, 92px);
+    background-image: none;
+    color: var(--violet-200);
+  }
+  .figures {
+    max-width: none;
   }
 }

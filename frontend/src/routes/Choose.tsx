@@ -122,6 +122,7 @@ export default function Choose({ holding, closing, origin, onBack }: Props) {
             {
               '--hue': mode.hue,
               '--stagger': `${i * 55}ms`,
+              '--focus-card': mode.focus.card,
             } as React.CSSProperties
           }
         >

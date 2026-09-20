@@ -227,3 +227,19 @@ to the rift. */
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ── Touch ─────────────────────────────────────────────────────────────────────
+   A pointer that cannot hover is also a pointer with no tip: it lands as a ~9mm pad, and
+   a control sized for a cursor is a coin toss. These two are the smallest interactive
+   things in the app and both were around 30px tall.
+
+   Keyed on `hover: none`, not on a width. A phone held in landscape is wider than some
+   laptops, and a touchscreen laptop is neither. */
+@media (hover: none) {
+  .ghost-btn {
+    padding: 12px 16px;
+  }
+  .hud-pill {
+    padding: 9px 14px;
+  }
+}

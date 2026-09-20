@@ -163,6 +163,7 @@ export default function QueryModal({ mode, from, onClose }: Props) {
         style={
           {
             '--hue': mode.hue,
+            '--focus-full': mode.focus.full,
             '--from-x': `${(from?.x ?? 0).toFixed(0)}px`,
             '--from-y': `${(from?.y ?? 40).toFixed(0)}px`,
             '--from-tilt': `${from?.tilt ?? 0}deg`,

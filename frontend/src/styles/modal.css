@@ -88,6 +88,18 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+  /* The safety net, and it earns its keep: this column's content has a floor of about
+     420px — a 140px minimum on the photo, plus the speech, the name, three bullets and the
+     signature — while its box is 80vh. Below roughly 550px of viewport height the two stop
+     agreeing, and with `overflow: visible` the remainder simply walked out through the
+     bottom of the panel: at 956x440 (a phone in landscape) the ability list rendered 102px
+     BELOW the console's own border, over the matrix behind it.
+
+     `hidden auto`, not `auto`: a lone `overflow-y` would compute `overflow-x` to `auto`
+     as well and hang a horizontal scrollbar under the column. Nothing scrolls at a normal
+     height — the photo is `flex: 1 1 0`, so it absorbs the slack and the content fits
+     exactly — this only engages once the column is genuinely squeezed. */
+  overflow: hidden auto;
 }
 .console__photo {
   position: relative;
@@ -103,6 +115,10 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  /* See `focus` in lib/modes.ts. This box changes shape more than any other in the app —
+     a tall column on a desktop, an 84px banner on a phone in landscape — so a fixed crop
+     origin cannot serve all of them, and the default one served none of the short ones. */
+  object-position: var(--focus-full, 50% 50%);
 }
 .console__photo-badge {
   position: absolute;
@@ -350,19 +366,265 @@
   color: rgba(152, 141, 159, 0.75);
 }
 
+/* ── Narrow: one column ────────────────────────────────────────────────────────
+   Stacking the two panes is the easy half. The hard half is that source order puts the
+   persona first, and stacked that is a 190px photo, a speech bubble, a name, a tagline
+   and three bullets — some 520px of scenery — before the only input on the screen. The
+   query ends up below the fold and the results below that, which is what made this
+   unusable on a phone rather than merely cramped.
+
+   `display: contents` dissolves the persona's own box so its parts become grid items of
+   the console in their own right, which is what makes them orderable independently. The
+   photo and the name stay on top (you need to know which door you opened), the work goes
+   next, and the speech and the ability list keep their place below it rather than being
+   deleted — they are worth reading, just not before you can type. */
 @media (max-width: 900px) {
   .console {
-    grid-template-columns: 1fr;
+    /* Flex, NOT a one-column grid. A grid whose container has a definite height sizes its
+       `auto` rows between min-content and max-content and, when they do not fit, shrinks
+       them rather than overflowing — so the results row collapsed to 428px while holding
+       3104px of rows, and the list spilled over the speech bubble below it. A column flex
+       container with non-shrinking items keeps every item at its content height and lets
+       the overflow become scroll, which is what a stacked dialog wants. */
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
     width: 94vw;
-    height: 92vh;
+    height: 92dvh;
     overflow-y: auto;
+    /* Momentum scrolling, and no rubber-banding the page behind the scrim. */
+    overscroll-behavior: contain;
     padding: 24px;
   }
-  .console__photo {
+  /* `display: contents` leaves the persona's children as flex items of the console, so
+     each one needs its own `flex: none` — the default `flex-shrink: 1` would squeeze them
+     all to fit the fixed height instead of scrolling. */
+  .console > *,
+  .console__persona > * {
     flex: none;
-    height: 190px;
+  }
+  .console__persona {
+    display: contents;
+  }
+  .console__photo {
+    order: -3;
+    flex: none;
+    /* A banner, not a portrait: her face sits in the upper third of every persona frame,
+       so a short crop biased upward keeps the subject and gives the height back. */
+    height: 132px;
+    min-height: 0;
+  }
+  .console__meta {
+    order: -2;
+    margin-top: 0;
+  }
+  .console__work {
+    order: -1;
+  }
+  .console__speech {
+    order: 1;
+    margin-top: 0;
+  }
+  /* The tail pointed up at her photo. Stacked, the thing above it is the results list. */
+  .console__speech::before {
+    display: none;
+  }
+  .console__can {
+    order: 2;
+    margin-top: 0;
   }
   .console__sig {
+    display: none;
+  }
+
+  /* One scroll, not two. The console is the scroller now, so the results list gives up
+     its own: a nested scroller on a touch screen swallows the flick that was meant for
+     the page, and which one moves depends on where your thumb landed. */
+  .field--results {
+    flex: none;
+  }
+  .results {
+    flex: none;
+    overflow: visible;
+  }
+
+  /* 16px is not a taste call: below it, iOS zooms the page in when the field takes focus
+     and does not zoom back out, so the console is left scrolled sideways and half off
+     screen for the rest of the session. */
+  .field__input {
+    font-size: 16px;
+  }
+}
+
+/* ── Phone: the console stops being a card on a scrim and becomes the screen ──── */
+@media (max-width: 640px) {
+  .backdrop {
+    padding: 0;
+    place-items: stretch;
+  }
+  .console {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    border-radius: 0;
+    padding: 16px 16px calc(28px + env(safe-area-inset-bottom));
+    box-shadow: none;
+    /* No swoop. Two reasons, and the second is structural: at this width the console IS
+       the viewport, so flying it in from a card that is no longer visible reads as a
+       glitch; and `console-in` leaves a transform behind (it is `both`), which would make
+       this element the containing block for the fixed close button below — the button
+       would then scroll away with the content it is meant to outlive. */
+    animation: fade-in 0.22s ease;
+    /* Same trap, second door: `will-change: transform` establishes a containing block for
+       fixed descendants even with no transform set, which silently pinned the close button
+       to this element and scrolled it off the top. Nothing here is animating a transform
+       any more, so the hint has nothing left to promise. */
+    will-change: auto;
+  }
+  /* Out of the flow entirely: hung on the panel's corner it scrolls off with the first
+     flick, and Esc — the other way out — is not on a phone keyboard. */
+  .console__close {
+    position: fixed;
+    top: calc(10px + env(safe-area-inset-top));
+    right: 10px;
+    background: rgba(21, 14, 34, 0.94);
+  }
+  .console__photo {
+    height: 108px;
+  }
+  .field {
+    padding: 16px 14px;
+  }
+  .field__foot {
+    /* The hint wraps to two or three lines at this width and squeezes Run to a sliver. */
+    flex-wrap: wrap;
+  }
+  .field__go {
+    /* 44px of target, which is the smallest a thumb reliably hits. */
+    padding: 12px 24px;
+  }
+  .row {
+    padding: 12px 6px;
+  }
+}
+
+
+/* ── Short viewports ───────────────────────────────────────────────────────────
+   Height, not width. A phone in landscape is 956x440: wide enough to keep the two-column
+   layout (and to sail past every width breakpoint above), short enough that the persona
+   column cannot hold what it is given. The rule above stops that spilling; this stops it
+   needing to, by spending the photo instead of the words.
+
+   Deliberately last in the file so it wins over the width blocks: the stacked layout has
+   the same problem on the same screens, and a 132px banner is no more affordable there. */
+@media (max-height: 560px) {
+  .backdrop {
+    padding: 12px;
+  }
+  .console {
+    /* Every pixel there is. `place-items: center` on a padded backdrop means the grid area
+       is the viewport minus that padding, so anything taller is centred AND clipped at
+       both ends — the close button first. */
+    height: calc(100dvh - 24px);
+    padding: 18px;
+    gap: 20px;
+  }
+  .console__photo {
+    /* No longer `flex: 1 1 0`. With this little height to share, a photo that takes what
+       is left takes everything. */
+    flex: none;
+    height: 84px;
+    min-height: 0;
+  }
+  .console__speech {
+    margin-top: 14px;
+  }
+  .console__meta {
+    margin-top: 14px;
+  }
+  .console__can {
+    margin-top: 14px;
+    padding-top: 12px;
+    gap: 7px;
+  }
+  .console__sig {
+    display: none;
+  }
+}
+
+/* Short but not narrow — every phone in landscape, and a browser window someone has
+   dragged flat. Width-only breakpoints send these to the stacked layout, which is exactly
+   backwards: at 844x390 there is 793px of panel to play with and 358px of height, so the
+   one thing not worth spending is vertical. Put the two columns back and let the persona
+   take a third of the width instead of the top third of the height.
+
+   Everything here undoes a rule from the `max-width: 900px` block above, which still
+   applies at these widths. */
+@media (max-height: 560px) and (min-width: 700px) {
+  .console {
+    display: grid;
+    grid-template-columns: clamp(220px, 30vw, 360px) 1fr;
+    gap: 22px;
+    /* The columns fit; only the results list inside them scrolls, as on a desktop. */
+    overflow: visible;
+  }
+  .console__persona {
+    display: flex;
+    flex-direction: column;
+    /* `display: contents` dissolved this box, and with it the `order` values that put the
+       work pane first. Back in a column of its own, source order is what we want again. */
+    order: 0;
+  }
+  .console__photo,
+  .console__meta,
+  .console__speech,
+  .console__can {
+    order: 0;
+  }
+  .console__work {
+    order: 0;
+    min-height: 0;
+  }
+  /* The results pane reclaims the leftover height and its own scroll. */
+  .field--results {
+    flex: 1;
+  }
+  .results {
+    flex: 1;
+    overflow-y: auto;
+  }
+
+  /* Tuned to the tightest screen this branch covers — 700x360, where the column is at its
+     narrowest (so the copy wraps most) and the panel at its shortest. The column can still
+     scroll if it has to; this is about it not having to for the sake of one stray line. */
+  .console__photo {
+    height: 64px;
+  }
+  .console__speech {
+    margin-top: 10px;
+    padding: 10px 12px;
+    font-size: 12.5px;
+  }
+  .console__meta {
+    margin-top: 10px;
+  }
+  .console__meta h2 {
+    font-size: 17px;
+  }
+  .console__can {
+    margin-top: 10px;
+    padding-top: 10px;
+    gap: 6px;
+  }
+}
+
+/* The tightest corner of that branch: 700-820px wide AND under 560px tall. The column is
+   down to ~220px there, so every line of the persona copy wraps, and the panel is at its
+   shortest — the two together still overran by ~40px. The speech bubble is the one piece
+   that is pure voice rather than instruction, so it is what goes; the name, the tagline and
+   the three things the mode can do all stay. Above 820px it fits and it stays. */
+@media (max-height: 560px) and (min-width: 700px) and (max-width: 820px) {
+  .console__speech {
     display: none;
   }
 }

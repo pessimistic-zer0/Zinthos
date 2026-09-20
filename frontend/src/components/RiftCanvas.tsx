@@ -3,7 +3,7 @@ import {
   BRANCHES,
   branchPoints,
   randomTendril,
-  riftFromLayout,
+  layoutBoxIn, riftFromLayout,
   riftPolygon,
   tracePath,
   type Branch,
@@ -135,7 +135,7 @@ export default function RiftCanvas({ stage, figure, onGeometry }: Props) {
       // Layout height, not the transformed box: the evasion loop and hover scale move her a
       // little, and the crack must stay put — she moves around it, not it around her.
       const f = figure.current
-      const rect = f ? new DOMRect(0, 0, f.offsetWidth, f.offsetHeight) : null
+      const rect = f ? layoutBoxIn(f, stage.current as HTMLElement, s) : null
       g = riftFromLayout(s, rect)
       // The shield is drawn on the stage's parent, the HUD frame.
       frameBox = stage.current?.parentElement?.getBoundingClientRect() ?? null

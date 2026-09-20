@@ -196,11 +196,48 @@ export function openingAt(t: number): number {
  * silhouette instead of hiding behind her spine. Capped to the stage so it never runs
  * under the header or footer chrome.
  */
+/**
+ * An element's box in viewport coordinates from LAYOUT ALONE — the offset chain, never
+ * getBoundingClientRect.
+ *
+ * The distinction is the whole point: Raven carries a float animation, a hover scale and
+ * the evasion drift, all of which move her measured rect every frame. The crack must not
+ * follow any of them — she moves around it, not it around her. Offsets ignore transforms,
+ * so this is where she IS rather than where she happens to be this frame.
+ *
+ * Returns null if the chain does not reach `root`, in which case the caller falls back to
+ * the stage's own centre rather than adding offsets to the wrong origin.
+ */
+export function layoutBoxIn(el: HTMLElement, root: HTMLElement, rootRect: DOMRect): DOMRect | null {
+  let x = 0
+  let y = 0
+  let n: HTMLElement | null = el
+  while (n && n !== root) {
+    x += n.offsetLeft
+    y += n.offsetTop
+    n = n.offsetParent as HTMLElement | null
+  }
+  if (n !== root) return null
+  return new DOMRect(rootRect.left + x, rootRect.top + y, el.offsetWidth, el.offsetHeight)
+}
+
 export function riftFromLayout(stage: DOMRect, figure: DOMRect | null): RiftGeometry {
   const height = figure && figure.height > 0 ? figure.height : stage.height * 0.6
+  // Centred on HER, not on the stage.
+  //
+  // These are the same point on a wide screen, where she is the only thing in the middle
+  // of it — which is why the stage's centre stood in for hers for so long. They stop being
+  // the same the moment anything else shares the column: on a portrait phone the name
+  // stacks ZIN above her and HOS below, and the pitch sits under that, which lifts her
+  // ~70px off the stage's centre. The crack is the one SHE is guarding, so it belongs
+  // behind her wherever the layout puts her — otherwise it drifts out from under her feet.
+  //
+  // `figure` must therefore carry a position, not just a size (see layoutBoxIn); a rect at
+  // the origin, or none at all, falls back to the stage.
+  const positioned = figure !== null && figure.width > 0 && (figure.left !== 0 || figure.top !== 0)
   return {
-    x: stage.left + stage.width / 2,
-    y: stage.top + stage.height / 2 - height * 0.03,
+    x: positioned ? figure.left + figure.width / 2 : stage.left + stage.width / 2,
+    y: (positioned ? figure.top + figure.height / 2 : stage.top + stage.height / 2) - height * 0.03,
     len: Math.min(height * 1.2, stage.height * 0.98),
     tilt: -0.21,
   }
