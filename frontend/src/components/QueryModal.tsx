@@ -1,16 +1,15 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
-import { api, EngineError, type TrackRecord } from '../lib/api'
+import {
+  api,
+  EngineError,
+  type LibraryScanResponse,
+  type TrackRecord,
+} from '../lib/api'
 import type { Mode } from '../lib/modes'
+import { splitNameLine } from '../lib/nameline'
 import '../styles/modal.css'
 
 type Status = 'idle' | 'loading' | 'done' | 'error'
-
-/** "Teardrop — Massive Attack" / "Teardrop - Massive Attack" → title + artist. */
-export function splitNameLine(line: string): { title: string; artist: string } {
-  const m = line.match(/^(.*?)\s+[—–-]\s+(.*)$/)
-  if (m) return { title: (m[1] ?? '').trim(), artist: (m[2] ?? '').trim() }
-  return { title: line.trim(), artist: '' }
-}
 
 const fmtDuration = (ms: number | null): string => {
   if (!ms || ms <= 0) return '—'
@@ -44,6 +43,8 @@ export default function QueryModal({ mode, from, onClose }: Props) {
   /** Only the `similar` mode uses a second step: resolve the name, then pick a copy. */
   const [candidates, setCandidates] = useState<TrackRecord[] | null>(null)
   const [seed, setSeed] = useState<TrackRecord | null>(null)
+  /** Mode 04 only: how the pasted lines resolved, so an ISRC visibly earns its keep. */
+  const [scan, setScan] = useState<LibraryScanResponse | null>(null)
   const input = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
@@ -65,6 +66,7 @@ export default function QueryModal({ mode, from, onClose }: Props) {
       setError('')
       setCandidates(null)
       setSeed(null)
+      setScan(null)
       setResults([])
 
       try {
@@ -109,7 +111,8 @@ export default function QueryModal({ mode, from, onClose }: Props) {
               break
             }
             const r = await api.libraryScan(tracks, 30)
-            setResults(r.tracks)
+            setScan(r)
+            setResults(r.recommendations)
             setStatus('done')
             break
           }
@@ -244,6 +247,15 @@ export default function QueryModal({ mode, from, onClose }: Props) {
               {status === 'done' && seed && (
                 <p className="results__note">
                   neighbours of <b>{seed.title}</b> — {seed.artists ?? 'unknown artist'}
+                </p>
+              )}
+
+              {status === 'done' && scan && (
+                <p className="results__note">
+                  matched <b>{scan.matched}</b> of {scan.total}
+                  {scan.methods.isrc > 0 && <> — {scan.methods.isrc} by ISRC (exact)</>}
+                  {scan.methods.fuzzy > 0 && <> — {scan.methods.fuzzy} by name</>}
+                  {scan.unmatched > 0 && <> — {scan.unmatched} not found</>}
                 </p>
               )}
 

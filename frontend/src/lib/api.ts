@@ -66,6 +66,24 @@ export interface SimilarResponse {
   pool: number
 }
 
+/**
+ * Mode 04. The engine's field is `recommendations`, not `tracks` — see
+ * `library.scan()` in backend/engine/library.py. It was typed as `tracks` here and read
+ * as `r.tracks` in QueryModal, so the mode rendered an empty list.
+ */
+export interface LibraryScanResponse {
+  total: number
+  matched: number
+  unmatched: number
+  methods: { isrc: number; fuzzy: number }
+  unmatched_samples: Array<{ title: string; artist: string }>
+  breakdown: {
+    genres: Array<{ genre: string; count: number }>
+    eras: Array<{ decade: string; count: number }>
+  }
+  recommendations: TrackRecord[]
+}
+
 export interface HealthResponse {
   status: string
   vectors: number
@@ -134,8 +152,8 @@ export const api = {
   libraryScan: (
     tracks: Array<Pick<TrackRecord, 'title'> & Partial<TrackRecord>>,
     size = 30,
-  ): Promise<{ count: number; tracks: TrackRecord[] }> =>
-    call('/library/scan', {
+  ): Promise<LibraryScanResponse> =>
+    call<LibraryScanResponse>('/library/scan', {
       method: 'POST',
       body: JSON.stringify({ tracks, size }),
     }),
