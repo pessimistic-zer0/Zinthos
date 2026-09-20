@@ -282,8 +282,15 @@ A **static** Space never sleeps and is free for everyone. With `--split`:
 
 The landing page paints immediately; `frontend/src/lib/demo.ts` calls `/health` the moment
 `DemoNotice` mounts, and **that request is what wakes the engine**. It retries every 4 s for
-up to 4 minutes, so the rift animation and the About page cover the wait instead of a loading
-screen — and the track count appears the moment the engine answers.
+up to 12 minutes — the old 4-minute ceiling was *shorter than the cold start it was waiting
+for*, so the poll could give up while the engine was still downloading.
+
+The wait is not silent. While the engine warms, `/health` answers 200 with `status != "ok"`
+plus `stage`, `downloaded_mb` and `total_mb`, and `DemoNotice` moves to the top right and
+reports it — "loading the catalogue slice — 9.6 of 27.0 GB" with a bar, then "opening the
+index", then back to the foot of the screen as the track count. `total_mb` is read from the
+dataset repo on the Hub at boot rather than hardcoded, so it cannot drift when the slice is
+rebuilt; if that call fails the readout simply loses its denominator.
 
 Two consequences worth knowing:
 
@@ -298,6 +305,36 @@ Two consequences worth knowing:
 
 Without `--split` everything is served from the one Space at `/`, `/api` and `/gradio`, which
 is simpler and fine for a Space that stays warm.
+
+## Keeping it warm
+
+The 4½-minute cold start above is avoidable, and it is worth avoiding: measured on a real
+boot, 27 GB at ~115 MB/s is 249 s, plus ~15 s to open the index.
+
+`fetch_artifacts()` short-circuits on `os.path.exists(demo.db)`, so the pull only happens when
+the container's ephemeral disk is empty — which is to say, on a *fresh container*. The Space
+sleeps after 48 idle hours (the Hub reports `gcTimeout: 172800`) and waking it starts a fresh
+one. **A single request resets that idle timer**, so a periodic ping keeps the container, and
+with it the slice already on its local disk.
+
+`/health` is the right thing to ping: `backend/engine/app.py` answers it with three field
+reads off a loaded index — no SQLite query, no vector search, and it never touches the GPU, so
+it costs nothing against the ZeroGPU allowance.
+
+**This repo does not schedule that ping.** It is a cron job at
+[cron-job.org](https://cron-job.org) hitting `https://<owner>-<name>.hf.space/api/health` every
+6 hours, with failure notifications on — a keep-warm that has quietly stopped is
+indistinguishable from one that is working, right up until a visitor pays for it. GitHub
+Actions was the other candidate and was the worse one: it disables scheduled workflows on a
+public repo after 60 days of inactivity, and its cron is best-effort.
+
+What a ping cannot prevent is a restart you did not ask for — a push, a platform reschedule,
+an OOM. Those still cost the full pull, which is what the warm-up readout is for.
+
+A mounted dataset volume (`--mount`) would remove the pull from *every* cause rather than just
+the common one, but it trades a boot cost for a per-query one: this engine does random 4 KB
+SQLite reads and mmaps its index, which is the worst case for network-backed storage. Both
+paths ship; the trade is unmeasured. See the `--mount` notes above.
 
 ## Run it locally first
 
