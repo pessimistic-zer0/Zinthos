@@ -297,11 +297,24 @@ Two consequences worth knowing:
 - **The engine URL is baked in at build time.** `--split` sets `VITE_ENGINE_BASE` to
   `https://<owner>-<name>.hf.space/api`; `api.ts` already reads it and falls back to a
   same-origin `/api` without it. Change the engine's repo id and you must re-push the portal.
-- **CORS stops being a safety net.** The browser now calls the engine cross-origin, so
-  `--split` sets `SONIC_CORS` to the portal's origin on the engine Space. Verified: the
-  portal origin gets `access-control-allow-origin`, an arbitrary origin gets nothing. The
-  portal URL is derived by rule (`space_origin`), so check it on the Hub — a mismatch shows
-  up only as a CORS error in the browser console. `--origin` overrides it.
+- **CORS stops being a safety net — and on a Space it is not a boundary either.** The
+  browser now calls the engine cross-origin, so `--split` sets `SONIC_CORS` to the portal's
+  origin on the engine Space, and `engine/app.py` passes it to `CORSMiddleware` as an
+  explicit allowlist. That allowlist is real when you run the engine yourself. **On a public
+  Space it is not enforced**: Hugging Face's edge proxy answers preflights itself and
+  reflects whatever `Origin` it is sent. Measured 2026-09-21 — `OPTIONS` against a path that
+  does not exist in the app returned `200` with `access-control-allow-origin` echoing an
+  arbitrary origin, and with no `server: uvicorn` header, so the request never reached
+  uvicorn at all.
+
+  That costs nothing here and should not be "fixed": the engine is public, unauthenticated
+  and read-only, there are no cookies or credentials, and anyone can `curl` the same public
+  data directly. CORS only ever governed *browser* reads of exactly what is already open. It
+  is recorded because the setting looks like protection and is not — do not put anything
+  behind `SONIC_CORS` on a hosted Space that you would not put on an open endpoint.
+
+  Set it correctly anyway: the value must be the portal's real origin, read from the Hub by
+  `space_origin` rather than derived, and `--origin` overrides it.
 
 Without `--split` everything is served from the one Space at `/`, `/api` and `/gradio`, which
 is simpler and fine for a Space that stays warm.

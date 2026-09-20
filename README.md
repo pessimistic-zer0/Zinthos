@@ -8,7 +8,7 @@ The whole pipeline — a 266 GB raw-data ETL, genre classification over 255M row
 
 ---
 
-## Demo
+## Demo &nbsp;·&nbsp; [**Try it live ↗**](https://pessimistic-zer0-zinthos-portal.static.hf.space)
 
 Two clients, one engine. Everything below is live against the full **255M-track** index.
 
@@ -67,12 +67,13 @@ Scanning a local library — point it at a folder of audio files; it reads their
 
 ### Try it
 
-**▶ [ajenzer0-zinthos-portal.static.hf.space](https://ajenzer0-zinthos-portal.static.hf.space)** — live, no sign-up.
+**▶ [pessimistic-zer0-zinthos-portal.static.hf.space](https://pessimistic-zer0-zinthos-portal.static.hf.space)** — live, no sign-up.
 
-The portal is a static Space, so it paints immediately. The engine behind it sleeps after
-48 idle hours and re-pulls its slice on wake, so the *first* query after a cold start can
-take a few minutes; the screen tells you what it is waiting for. Everything after that is
-the speed the recordings above show.
+The portal is a static Space, so it paints immediately, and the engine behind it is kept
+awake by a scheduled ping, so queries normally answer at the speed the recordings above
+show. A redeploy or a platform restart still wipes the Space's disk and costs one ~4½-minute
+slice download before it can answer — when that happens the screen says so and counts it
+down, rather than leaving you on a spinner.
 
 A public demo runs the same engine over a **slice** of the catalogue — the full `master.db`
 is 162 GB and the FAISS index 9 GB, neither of which fits a free host. No code is forked: the
