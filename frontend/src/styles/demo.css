@@ -32,6 +32,23 @@
   box-shadow: 0 6px 24px rgba(7, 4, 15, 0.55);
 }
 
+/* ── The warm-up variant sits at the TOP RIGHT ────────────────────────────────
+   The resting notice belongs at the foot of the screen, under everything the eye is meant
+   to land on — it is a footnote about the deployment. The warm-up line is not a footnote:
+   it is the answer to "why is nothing happening", and it has to be where someone looks when
+   they are waiting. Top right is the one corner both screens leave empty (the landing puts
+   GitHub top-left, the matrix puts Back top-left).
+
+   `left: auto` matters. The base rule pins both edges and centres with auto margins; leaving
+   `left: 16px` in place would keep it centred and the `right` would do nothing. */
+.demo-notice--boot {
+  top: calc(14px + env(safe-area-inset-top));
+  right: calc(16px + env(safe-area-inset-right));
+  bottom: auto;
+  left: auto;
+  margin-inline: 0;
+}
+
 .demo-notice__dot {
   flex: none;
   width: 6px;
@@ -52,6 +69,31 @@
 .demo-notice__text strong {
   color: var(--violet-200);
   font-weight: 600;
+}
+
+/* ── Warm-up bar ──────────────────────────────────────────────────────────────
+   Shown only while the hosted engine is still pulling its slice, and only when it reported a
+   total to divide by (demo/app.py's `total_mb`). No denominator, no bar: a bar that fills at
+   a rate nobody chose is a spinner in a costume, and this one is meant to be believed. */
+.demo-notice__bar {
+  flex: none;
+  width: clamp(48px, 14vw, 72px);
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(168, 85, 247, 0.22);
+  overflow: hidden;
+}
+
+.demo-notice__bar i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--violet-400);
+  /* scaleX off the left edge rather than an animated `width`. Width is a layout property and
+     this changes every four seconds behind two 60fps canvases; a transform is composited and
+     is what the repo's perf rules allow (see frontend/README.md). */
+  transform-origin: left center;
+  transition: transform 400ms ease-out;
 }
 
 .demo-notice__close {
@@ -110,16 +152,38 @@
 
      The reserve is the bar's measured height: two wrapped lines of 11.5px plus its own
      padding, in landscape. Portrait is narrower and wraps further — see below. */
-  body:has(.demo-notice) .landing__footer,
-  body:has(.demo-notice) .choose__footer {
+  body:has(.demo-notice:not(.demo-notice--boot)) .landing__footer,
+  body:has(.demo-notice:not(.demo-notice--boot)) .choose__footer {
     padding-bottom: 62px;
+  }
+
+  /* Docked to the TOP edge instead, by the same argument as the bottom dock: at these sizes
+     a floating pill has no margin to float in. The border flips to the underside. */
+  .demo-notice--boot {
+    top: 0;
+    bottom: auto;
+    left: 0;
+    right: 0;
+    width: auto;
+    border-width: 0 0 1px;
+    padding: calc(10px + env(safe-area-inset-top)) 12px 10px;
+  }
+
+  /* And it is `position: fixed`, so it paints OVER the top corners rather than pushing them
+     down — the matrix's "Back to Portal" and the landing's GitHub link both ended up
+     underneath it and untappable. Same reserve-the-height fix as the bottom dock makes for
+     the footers, and the same `:has()` scoping so it unsticks when the engine comes up and
+     the notice returns to the foot of the screen. */
+  body:has(.demo-notice--boot) .choose__nav,
+  body:has(.demo-notice--boot) .landing__top {
+    padding-top: calc(58px + env(safe-area-inset-top));
   }
 }
 
 /* Portrait: the same bar over half the width wraps to three or four lines. */
 @media (max-width: 640px) {
-  body:has(.demo-notice) .landing__footer,
-  body:has(.demo-notice) .choose__footer {
+  body:has(.demo-notice:not(.demo-notice--boot)) .landing__footer,
+  body:has(.demo-notice:not(.demo-notice--boot)) .choose__footer {
     padding-bottom: 92px;
   }
 }

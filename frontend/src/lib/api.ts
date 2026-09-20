@@ -88,6 +88,19 @@ export interface HealthResponse {
   status: string
   vectors: number
   nprobe: number
+  /**
+   * Cold-boot fields. Present ONLY on the hosted demo and only while it is still warming:
+   * demo/app.py answers /health with 200 throughout the boot (a 503 there gets the Space
+   * killed by the platform's own probe), so readiness lives in `status`, and these describe
+   * how far along it is. A local engine never sends them, which is why every one is optional.
+   */
+  stage?: string
+  ready?: boolean
+  elapsed_s?: number
+  downloaded_mb?: number
+  /** Absent whenever the Hub could not be asked for the slice's size — never assume 0. */
+  total_mb?: number
+  detail?: string
 }
 
 export class EngineError extends Error {

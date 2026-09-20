@@ -1,4 +1,4 @@
-import { useLayoutEffect, useState, type RefObject } from 'react'
+import { useLayoutEffect, useState } from 'react'
 import type { WarpOrigin } from '../App'
 import { MODES } from '../lib/modes'
 import { polygonToClip, reachOf, riftPolygon } from '../lib/rift'
@@ -22,7 +22,8 @@ interface Layout {
 
 interface Props {
   origin: WarpOrigin | null
-  host: RefObject<HTMLDivElement | null>
+  /** The screen's element itself, not a ref to it — see the note in routes/Choose.tsx. */
+  host: HTMLDivElement | null
 }
 
 /** Where the segment from `from` toward `to` first meets the rectangle around `to`. */
@@ -59,7 +60,7 @@ export default function ChooseBackdrop({ origin, host }: Props) {
   const [layout, setLayout] = useState<Layout | null>(null)
 
   useLayoutEffect(() => {
-    const el = host.current
+    const el = host
     if (!el) return
 
     const measure = () => {

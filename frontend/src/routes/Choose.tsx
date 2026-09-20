@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { WarpOrigin } from '../App'
 import { MODES, modeById, type Mode, type ModeKind } from '../lib/modes'
 import QueryModal from '../components/QueryModal'
@@ -31,7 +31,20 @@ export default function Choose({ holding, closing, origin, onBack }: Props) {
   // all for someone who opened #/choose directly, who would otherwise get a slow zoom
   // with no flight in front of it.
   const [viaWarp] = useState(holding)
-  const host = useRef<HTMLDivElement>(null)
+  /**
+   * The screen's own element, held in STATE behind a callback ref rather than in a useRef.
+   *
+   * ChooseBackdrop measures this box in a layout effect, and React commits bottom-up: a
+   * child's layout effect runs BEFORE its parent's ref is attached. With a plain ref the
+   * backdrop was handed `null` on the first commit, bailed out, and — its deps being two
+   * stable values — was never told otherwise, so the tear and the wires simply never drew.
+   *
+   * It drew in development anyway, which is what hid this for so long: StrictMode re-runs
+   * every effect on mount, and the second pass found the node. Production builds do not
+   * double-invoke, so the deployed portal showed no rift at all while the dev server showed
+   * one. State makes the node arrive as a render, which is a signal the child cannot miss.
+   */
+  const [host, setHost] = useState<HTMLDivElement | null>(null)
 
   /** Closing the console un-selects the card: a selection only lives while its console is open. */
   const close = useCallback(() => {
@@ -67,7 +80,7 @@ export default function Choose({ holding, closing, origin, onBack }: Props) {
 
   return (
     <div
-      ref={host}
+      ref={setHost}
       className={`choose${viaWarp ? ' is-warp-arrival' : ''}${holding ? ' is-holding' : ''}${closing ? ' is-closing' : ''}`}
       style={
         origin

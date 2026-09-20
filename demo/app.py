@@ -108,6 +108,34 @@ def fetch_artifacts() -> None:
     print(f"artifacts ready — disk after: {du.free / 1e9:.1f} GB free", flush=True)
 
 
+def slice_total_mb() -> int | None:
+    """How big the slice is, in MB, read from the dataset repo on the Hub.
+
+    WHY ASK THE HUB RATHER THAN HARDCODE IT
+      The number is only useful if it is right, and a constant in this file would be wrong the
+      first time build_demo_slice.py produces a different slice — silently, and in the
+      direction that makes a progress bar lie. The repo already knows its own size; asking
+      costs one request, once, on a path that is about to spend minutes transferring 27 GB.
+
+    NOTHING HERE MAY RAISE. This runs on the boot path, and a progress bar is not worth a
+    dead Space: every failure returns None and the portal falls back to an un-anchored
+    "N MB so far", which is exactly what it showed before this existed.
+    """
+    if not DATASET_REPO:
+        return None
+    try:
+        from huggingface_hub import HfApi
+
+        info = HfApi(token=os.environ.get("HF_TOKEN") or None).repo_info(
+            DATASET_REPO, repo_type="dataset", files_metadata=True)
+        total = sum(f.size or 0 for f in (info.siblings or []))
+        return round(total / 1e6) or None
+    except Exception as e:  # noqa: BLE001 — a missing denominator is not a boot failure
+        print(f"  ! could not size {DATASET_REPO} ({type(e).__name__}: {e})"
+              " — booting without a progress total", flush=True)
+        return None
+
+
 def configure_engine() -> None:
     """Point backend/engine at the slice. setdefault throughout, so a Space variable wins."""
     defaults = {
@@ -306,6 +334,10 @@ class Boot:
     stage = "starting"
     detail = ""
     started = time.time()
+    # Total bytes the slice will occupy, in MB, so the portal can draw a real progress bar
+    # instead of an unanchored "860 MB so far". None whenever the Hub could not be asked —
+    # see slice_total_mb; every consumer treats its absence as "no denominator", never as 0.
+    total_mb: int | None = None
 
     @classmethod
     def bytes_on_disk(cls) -> int:
@@ -323,6 +355,8 @@ class Boot:
             out["detail"] = cls.detail
         if cls.stage == "downloading":
             out["downloaded_mb"] = round(cls.bytes_on_disk() / 1e6)
+            if cls.total_mb:
+                out["total_mb"] = cls.total_mb
         return out
 
 
@@ -412,9 +446,13 @@ class ApiGate:
             await self.inner(scope, receive, send)
             return
         st = Boot.status()
-        detail = (f"warming up — {st['stage']}"
-                  + (f", {st['downloaded_mb']} MB so far" if "downloaded_mb" in st else "")
-                  + f" ({st['elapsed_s']:.0f}s)")
+        if "total_mb" in st:
+            got = f", {st['downloaded_mb'] / 1000:.1f} of {st['total_mb'] / 1000:.1f} GB"
+        elif "downloaded_mb" in st:
+            got = f", {st['downloaded_mb']} MB so far"
+        else:
+            got = ""
+        detail = f"warming up — {st['stage']}{got} ({st['elapsed_s']:.0f}s)"
         # /api/health answers 200 EVEN WHILE WARMING, with status != "ok". Liveness and
         # readiness are different questions: the process IS alive and serving, it just has no
         # index yet. Callers check `status`, which is what frontend/src/lib/demo.ts does.
@@ -446,7 +484,10 @@ def boot_in_background() -> None:
     async def run() -> None:
         try:
             if NEEDS_DOWNLOAD:
+                # Stage first, total second: the stage is what the portal needs to start
+                # saying something, and the Hub round trip that follows costs a second.
                 Boot.stage = "downloading"
+                Boot.total_mb = await anyio.to_thread.run_sync(slice_total_mb)
                 await anyio.to_thread.run_sync(fetch_artifacts)
             Boot.stage = "loading index"
             async with engine_app.router.lifespan_context(engine_app):
