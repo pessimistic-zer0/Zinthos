@@ -25,12 +25,50 @@ _HYDRATE_SQL = """
 """
 
 
+# Set by init_preview(). A demo slice may store preview_url as the 20 varying bytes rather
+# than the 107-char URL — see the COMPACTION note in demo/build_demo_slice.py.
+_PREVIEW_TEMPLATE: str | None = None
+
+
+def init_preview() -> str:
+    """Load the preview-URL template, if this database packs them. Log line for startup.
+
+    The template lives in the database (`demo_meta.preview_template`) rather than in code or
+    an env var, so a bundle carries its own decoding rule and cannot be paired with the wrong
+    one. master.db has no demo_meta and stores full URLs, so this is a no-op there.
+    """
+    global _PREVIEW_TEMPLATE
+    _PREVIEW_TEMPLATE = None
+    if not db.has_table("demo_meta"):
+        return "preview_url stored in full"
+    rows = db.query("SELECT value FROM demo_meta WHERE key = 'preview_template'")
+    if not rows:
+        return "preview_url stored in full"
+    _PREVIEW_TEMPLATE = rows[0]["value"]
+    return f"preview_url packed ({_PREVIEW_TEMPLATE[:40]}…) — rebuilding on hydrate"
+
+
+def expand_preview(value: Any) -> str | None:
+    """A packed preview_url back to a full URL; anything else through untouched.
+
+    bytes → the template's {} filled with their hex. A str is already a URL (the builder
+    leaves rows that did not match the template as they were), and None stays None. Being
+    type-driven rather than flag-driven is what lets one table hold both.
+    """
+    if isinstance(value, (bytes, bytearray)) and _PREVIEW_TEMPLATE:
+        return _PREVIEW_TEMPLATE.format(bytes(value).hex())
+    return value
+
+
 def hydrate(track_ids: list[int]) -> list[dict[str, Any]]:
     """Display records for the given ids, returned in the SAME order as requested."""
     if not track_ids:
         return []
     rows = db.query(_HYDRATE_SQL.format(ph=db.placeholders(len(track_ids))), track_ids)
     by_id = {r["track_id"]: dict(r) for r in rows}
+    if _PREVIEW_TEMPLATE:
+        for rec in by_id.values():
+            rec["preview_url"] = expand_preview(rec["preview_url"])
     return [by_id[tid] for tid in track_ids if tid in by_id]
 
 

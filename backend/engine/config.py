@@ -93,6 +93,11 @@ class Config:
     # already serves reads. On the 15 GB box this is the main lever against swap pressure.
     sqlite_mmap_bytes: int = int(_env("SONIC_SQLITE_MMAP", "30_000_000_000".replace("_", "")))
     sqlite_cache_kb: int = int(_env("SONIC_SQLITE_CACHE_KB", "49152"))  # ~48 MB / connection
+    # Open the databases with immutable=1, skipping locking and the change counter. Required
+    # on a read-only network mount that cannot do POSIX file locking (a Hugging Face Space
+    # with the slice mounted as a dataset volume) — see engine/db.py::_uri. Off by default:
+    # it PROMISES the file never changes, and a broken promise corrupts silently.
+    sqlite_immutable: bool = _env("SONIC_SQLITE_IMMUTABLE", "0") not in ("0", "false", "False", "")
 
     # ── server ──────────────────────────────────────────────────────────────────
     host: str = _env("SONIC_HOST", "127.0.0.1")

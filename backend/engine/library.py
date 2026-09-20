@@ -17,7 +17,7 @@ from typing import Any
 
 import numpy as np
 
-from . import db, hydrate
+from . import db, hydrate, similar
 from .config import CONFIG
 from .index import VectorIndex
 from .textnorm import candidate_keys
@@ -125,15 +125,25 @@ def match(tracks: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[int]
 
 
 # ── taste-profile recommendations ───────────────────────────────────────────────────
-def _embeddings(track_ids: list[int]) -> np.ndarray:
-    vecs: list[np.ndarray] = []
-    for chunk in _chunks(track_ids):
-        rows = db.query(
-            f"SELECT vector_blob FROM ml_10d_embeddings "
-            f"WHERE track_id IN ({db.placeholders(len(chunk))})",
-            chunk,
-        )
-        vecs.extend(np.frombuffer(r["vector_blob"], dtype="<f4") for r in rows)
+def _embeddings(index: VectorIndex, track_ids: list[int]) -> np.ndarray:
+    """Vectors for the matched library, from wherever this deployment keeps them.
+
+    Goes through similar.get_embedding rather than querying ml_10d_embeddings directly, so a
+    compacted demo slice — which drops that table and leans on the exact index instead — takes
+    the same path here as it does for F6. Missing vectors are skipped, not zero-filled: a zero
+    row would drag the taste centroid toward the origin.
+    """
+    if similar.embeddings_from_table():
+        vecs: list[np.ndarray] = []
+        for chunk in _chunks(track_ids):
+            rows = db.query(
+                f"SELECT vector_blob FROM ml_10d_embeddings "
+                f"WHERE track_id IN ({db.placeholders(len(chunk))})",
+                chunk,
+            )
+            vecs.extend(np.frombuffer(r["vector_blob"], dtype="<f4") for r in rows)
+    else:
+        vecs = [v for t in track_ids if (v := index.reconstruct(t)) is not None]
     if not vecs:
         return np.empty((0, CONFIG.embed_dim), dtype=np.float32)
     return np.vstack(vecs)
@@ -142,7 +152,7 @@ def _embeddings(track_ids: list[int]) -> np.ndarray:
 def recommend(index: VectorIndex, owned: list[int], size: int) -> list[dict[str, Any]]:
     """Mean-pool the owned tracks' embeddings into a taste centroid, FAISS-search the catalog,
     drop tracks the user already owns, dedupe catalog copies, hydrate the top `size`."""
-    embs = _embeddings(owned)
+    embs = _embeddings(index, owned)
     if embs.shape[0] == 0:
         return []
     centroid = embs.mean(axis=0)

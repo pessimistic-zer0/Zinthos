@@ -28,7 +28,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from starlette.requests import Request
 
-from . import artist, bitmaps, hydrate, library, playlist, resolve, search, similar
+from . import artist, bitmaps, db, hydrate, library, playlist, resolve, search, similar
 from .config import CONFIG
 from .index import VectorIndex
 
@@ -47,8 +47,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Verify the track_tags bit assignment BEFORE serving: a reordered tagfamily dict would make
     # 93.7M stored masks decode to the wrong families with no error anywhere. init_tags() turns
     # the terms off rather than trusting them, and returns the line to log either way.
+    # Before the tag checks: both of these read the artifacts, and on a deferred-boot host
+    # the files only landed moments ago (see engine/db.py's note on the lazy sidecar check).
+    print(f"  {db.init_match()}")
     print(f"  {similar.init_tags()}")
     print(f"  {bitmaps.init()}")
+    # Both of these adapt to a COMPACTED slice (demo/build_demo_slice.py), which drops
+    # ml_10d_embeddings in favour of the exact index and packs preview_url. Each reports what
+    # it found, so the log says which layout is being served rather than leaving it to guess.
+    print(f"  {similar.init_embeddings(idx)}")
+    print(f"  {hydrate.init_preview()}")
     print(f"engine ready: {idx.ntotal:,} vectors mmap'd, warmed in {time.time()-t:.1f}s "
           f"({CONFIG.worker_threads} worker threads)")
     yield

@@ -86,12 +86,49 @@ def init_tags() -> str:
     return f"track_tags ready ({len(disk)} families, region/sonic terms on)"
 
 
-def get_embedding(track_id: int) -> np.ndarray | None:
-    """The seed's lossless 10-D vector from master.db (NOT the lossy fp16 index)."""
-    rows = db.query("SELECT vector_blob FROM ml_10d_embeddings WHERE track_id = ?", (track_id,))
-    if not rows:
-        return None
-    return np.frombuffer(rows[0]["vector_blob"], dtype="<f4")
+# Set by init_embeddings() at startup: whether master.db carries the vectors, or the index
+# has to hand them back. A compacted demo slice drops the table (see demo/build_demo_slice.py).
+_HAS_EMBED_TABLE = True
+
+
+def init_embeddings(index: VectorIndex) -> str:
+    """Decide where seed vectors come from. Returns a line for the startup log.
+
+    ml_10d_embeddings is preferred whenever it exists, because the PRODUCTION index is
+    IVFSQfp16 and reconstructing from it is lossy. When it is absent the index must be exact
+    for the fallback to be equivalent — so this does not just check for the table, it checks
+    that reconstruct() actually returns something, and says so out loud either way.
+    """
+    global _HAS_EMBED_TABLE
+    _HAS_EMBED_TABLE = db.has_table("ml_10d_embeddings")
+    if _HAS_EMBED_TABLE:
+        return "seed vectors from ml_10d_embeddings (lossless)"
+    row = db.query("SELECT track_id FROM track_search LIMIT 1")
+    probe = index.reconstruct(row[0]["track_id"]) if row else None
+    if probe is None:
+        return ("ml_10d_embeddings absent AND the index cannot reconstruct — /search/similar "
+                "will return 404 for every seed. Rebuild the slice with --no-compact, or the "
+                "index with a direct map.")
+    return f"seed vectors reconstructed from the index ({'IVF' if index.is_ivf else 'flat'})"
+
+
+def embeddings_from_table() -> bool:
+    """Whether ml_10d_embeddings is the vector source here (library.py asks before bulk-reading)."""
+    return _HAS_EMBED_TABLE
+
+
+def get_embedding(index: VectorIndex, track_id: int) -> np.ndarray | None:
+    """The seed's 10-D vector: master.db's lossless BLOB, or the exact index's own copy.
+
+    Either way the caller feeds it straight to index.search, which L2-normalizes it — so the
+    reconstructed vector (already normalized when it was added) and the raw BLOB produce the
+    same query. See init_embeddings for when each path applies.
+    """
+    if _HAS_EMBED_TABLE:
+        rows = db.query("SELECT vector_blob FROM ml_10d_embeddings WHERE track_id = ?",
+                        (track_id,))
+        return np.frombuffer(rows[0]["vector_blob"], dtype="<f4") if rows else None
+    return index.reconstruct(track_id)
 
 
 def _prox(a: int | None, b: int | None, scale: float) -> float:
@@ -222,7 +259,7 @@ def find_similar(index: VectorIndex, track_id: int, k: int,
     """Top-k similar records. `info`, if given, receives {"filter": "region"|"sonic"|"" (which
     bitmap retrieval ran inside), "gate": "region+sonic"|"region"|"sonic"|"", "pool": <candidates
     after collapse+gate>} for the response/log."""
-    emb = get_embedding(track_id)
+    emb = get_embedding(index, track_id)
     if emb is None:
         return []
     sel, filtered = _seed_selector(track_id)
