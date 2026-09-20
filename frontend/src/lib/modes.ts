@@ -6,7 +6,16 @@
  * fifth mode means adding an entry here plus a branch in QueryModal.
  */
 
+import { isDemo } from './demo'
+
 export type ModeKind = 'vibe' | 'similar' | 'playlist' | 'library'
+
+/**
+ * What to call the thing being searched. The hosted demo runs the same engine over a slice
+ * of the catalogue (see lib/demo.ts), so the "255M tracks" claim would be wrong there; the
+ * exact figure is stated once by DemoNotice rather than repeated in every mode's copy.
+ */
+const CATALOG = isDemo ? 'A slice of the catalogue' : '255M tracks'
 
 export interface Mode {
   id: ModeKind
@@ -42,7 +51,7 @@ export const MODES: readonly Mode[] = [
     persona: 'Disbelief Raven',
     speech: '"You want it in words? Fine. Try me."',
     placeholder: 'rainy 3am drive, warm bass, nothing cheerful',
-    hint: 'Rules parse what they can; the LLM covers the rest. 255M tracks, ranked by feel.',
+    hint: `Rules parse what they can; the LLM covers the rest. ${CATALOG}, ranked by feel.`,
     abilities: [
       'Describe the music in your own words.',
       'Moods, moments and feelings all work.',
@@ -101,12 +110,12 @@ export const MODES: readonly Mode[] = [
     tagline: 'Start from what you already own',
     persona: 'Cozy Slouch Raven',
     speech: '"Show me your shelf. I\'ll find the gaps."',
-    placeholder: 'paste one "Title — Artist" per line',
-    hint: 'Matches your files against the catalog by ISRC, then fuzzily, and seeds from the hits.',
+    placeholder: 'Title — Artist   (one per line; add an ISRC at the end if you have one)',
+    hint: 'Names are matched fuzzily against the catalogue; an ISRC on the line matches exactly. Seeds from the hits.',
     abilities: [
       'Paste in songs you already have.',
-      'See what fits alongside them.',
-      'Find what your collection is missing.',
+      'Add an ISRC per line for an exact match — optional.',
+      'See what fits alongside them, and what is missing.',
     ],
     card: '/assets/personas/card-04.jpg',
     full: '/assets/personas/full-04.jpg',

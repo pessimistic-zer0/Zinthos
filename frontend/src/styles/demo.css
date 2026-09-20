@@ -1,0 +1,79 @@
+/* ── Demo notice ──────────────────────────────────────────────────────────────
+   One line at the foot of the screen on the hosted build only (VITE_DEMO=1).
+
+   Deliberately quiet: it sits under everything the eye is meant to land on, borrows the
+   existing tokens rather than inventing a colour, and uses no `filter` or `backdrop-filter`
+   — the landing runs two canvases at 60fps behind it and a compositor effect here would be
+   re-applied on every one of those frames (see frontend/README.md, "Performance rules"). */
+.demo-notice {
+  position: fixed;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: 60;
+
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(640px, calc(100vw - 32px));
+  padding: 8px 10px 8px 14px;
+
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  /* Flat fill, not glass: see the note above. */
+  background: rgba(21, 14, 34, 0.92);
+  box-shadow: 0 6px 24px rgba(7, 4, 15, 0.55);
+}
+
+.demo-notice__dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--violet-400);
+  box-shadow: 0 0 8px var(--violet-500);
+}
+
+.demo-notice__text {
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-muted);
+  letter-spacing: 0.01em;
+}
+
+.demo-notice__text strong {
+  color: var(--violet-200);
+  font-weight: 600;
+}
+
+.demo-notice__close {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 160ms ease, background-color 160ms ease;
+}
+
+.demo-notice__close:hover,
+.demo-notice__close:focus-visible {
+  color: var(--violet-100);
+  background: rgba(168, 85, 247, 0.16);
+}
+
+@media (max-width: 560px) {
+  .demo-notice {
+    bottom: 8px;
+    padding: 7px 8px 7px 12px;
+  }
+
+  .demo-notice__text {
+    font-size: 11.5px;
+  }
+}

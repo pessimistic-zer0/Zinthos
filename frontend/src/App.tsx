@@ -3,6 +3,7 @@ import Landing from './routes/Landing'
 import Choose from './routes/Choose'
 import About from './routes/About'
 import RiftReveal from './components/RiftReveal'
+import DemoNotice from './components/DemoNotice'
 import type { RiftGeometry } from './lib/rift'
 import { prefersReducedMotion, riftCloseMs, warpDurationMs } from './lib/warp'
 import './styles/global.css'
@@ -119,6 +120,8 @@ export default function App() {
       )}
       {phase === 'warp' && origin && <RiftReveal origin={origin} />}
       {phase === 'close' && origin && <RiftReveal origin={origin} mode="close" />}
+      {/* Hosted build only (VITE_DEMO=1); renders nothing locally. */}
+      <DemoNotice />
     </>
   )
 }
