@@ -11,7 +11,7 @@ work); only the final k are hydrated (expensive joins). N (CONFIG.faiss_topk) is
 so a mega-hit's own catalog copies don't crowd out genuinely-distinct neighbours.
 
 embedding_sim is scaled against the POOL's percentile range, not cosine's theoretical [-1,1] —
-see _normalize_sim. SONIC_SIM_NORM=legacy restores the old map for A/B comparison.
+see normalize_sim. SONIC_SIM_NORM=legacy restores the old map for A/B comparison.
 
 region_family / sonic_family come from track_tags (build_track_tags.py) and are OFF until
 init_tags() confirms the table exists and its bit assignment still matches engine.tagfamily.
@@ -31,7 +31,7 @@ from .index import VectorIndex
 # many pop=0 obscurities out-ranked recognisable tracks. Genre stays a SOFT 0.20 — that bonus
 # already floats same-genre neighbours to the top, so a HARD genre filter proved redundant for
 # small k and would have discarded the ~46% NULL-genre (unlabeled) neighbours. See F6 notes.
-# RE-TUNED after the _normalize_sim fix: pop 0.20 → 0.05, the freed 0.15 going to sim. The old
+# RE-TUNED after the normalize_sim fix: pop 0.20 → 0.05, the freed 0.15 going to sim. The old
 # 0.20 was set while sim was inert (swing 0.003 vs pop's 0.124) — popularity was the only lever
 # that moved, so it absorbed work that wasn't its own. With sim now swinging the full 0.45 it no
 # longer needs the help, and 0.20 was leaving a visible fame-tilt in the top rows.
@@ -137,8 +137,10 @@ def _prox(a: int | None, b: int | None, scale: float) -> float:
     return max(0.0, 1.0 - abs(a - b) / scale)
 
 
-def _normalize_sim(cos: np.ndarray) -> np.ndarray:
+def normalize_sim(cos: np.ndarray) -> np.ndarray:
     """Map the pool's cosines onto [0,1] — the scale the other four re-rank terms already use.
+
+    Public because F7 (library.recommend) needs the same ruler for the same reason.
 
     A weight is not an influence: influence is weight × the term's SPREAD across the pool.
     "legacy" ((cos+1)/2) scales against cosine's THEORETICAL [-1,1], but a top-1500 pool in
@@ -234,8 +236,11 @@ def _retrieve(index: VectorIndex, emb: np.ndarray, track_id: int,
     return hits[:n]
 
 
-def _seed_selector(track_id: int) -> tuple[Any | None, str]:
+def seed_selector(track_id: int) -> tuple[Any | None, str]:
     """The bitmap selector for the seed's own family — region if it has one, else sonic.
+
+    Public because F7 (library.recommend) retrieves per owned track and wants the same
+    family constraint per seed, for the same reason.
 
     Region first because it is the axis the embedding cannot see at all (the 13 features put
     Tu Jo Mila among Thai pop; they do put Raining Blood among metal). One axis, not the AND:
@@ -262,7 +267,7 @@ def find_similar(index: VectorIndex, track_id: int, k: int,
     emb = get_embedding(index, track_id)
     if emb is None:
         return []
-    sel, filtered = _seed_selector(track_id)
+    sel, filtered = seed_selector(track_id)
     hits = _retrieve(index, emb, track_id, sel)
     if sel is not None and len(hits) < max(CONFIG.tag_gate_min, 2 * k):
         # Family too thin around this seed for the filtered scan to fill a pool (a tag carried
@@ -296,7 +301,7 @@ def find_similar(index: VectorIndex, track_id: int, k: int,
         info.update(filter=filtered, gate=gated, pool=len(cand))
     if not cand:
         return []
-    sims = _normalize_sim(np.array([c for _, c, _ in cand], dtype=np.float64))
+    sims = normalize_sim(np.array([c for _, c, _ in cand], dtype=np.float64))
 
     scored: list[tuple[float, int]] = []
     for (tid, _cos, f), sim in zip(cand, sims):

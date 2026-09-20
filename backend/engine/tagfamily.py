@@ -23,7 +23,7 @@ TWO AXES, NOT ONE
     Punjabi rap tracks agree on both axes, a Punjabi rap track and a Punjabi devotional track
     agree on one. That graded agreement is the signal.
 
-CALIBRATION WARNING (learned the hard way — see similar._normalize_sim)
+CALIBRATION WARNING (learned the hard way — see similar.normalize_sim)
     A weight is not an influence: influence is weight x SPREAD across the candidate pool. Exact-tag
     Jaccard has a pool mean of 0.014-0.106, so a 0.20-weighted Jaccard term would move a typical
     candidate by ~0.006 and be decorative. Family agreement is binary per axis, uses the full 0-1

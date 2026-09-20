@@ -20,7 +20,7 @@ import numpy as np
 from . import db, hydrate, similar
 from .config import CONFIG
 from .index import VectorIndex
-from .textnorm import candidate_keys
+from .textnorm import candidate_keys, fold
 
 # Canonical 20 macro genres; list index == genre_id. Mirrors
 # model_training/genre_label_encoder.joblib (authority) and build_track_search.py.
@@ -149,26 +149,113 @@ def _embeddings(index: VectorIndex, track_ids: list[int]) -> np.ndarray:
     return np.vstack(vecs)
 
 
+# F7 re-rank. Two terms, not F6's seven: there is no single seed track here, so tempo/era
+# proximity and a seed's region/sonic family have nothing to be measured against.
+#
+# Measured on a five-track library (Teardrop / Blinding Lights / Midnight City / Tum Hi Ho /
+# Raining Blood) against the full 254.8M index. W_POP is 0.15, not more, because the pool it
+# now scores is already made of recognisable music — the earlier need for a heavy popularity
+# thumb was a symptom of querying the wrong point, not of the ranking.
+W_SIM, W_POP = 0.85, 0.15
+
+# Per-seed retrieval, bounded. A 726-file library would otherwise be 726 FAISS calls.
+_MAX_SEEDS = 24
+_PER_SEED_K = 300
+# Extra records hydrated so the owned-title filter below can drop some and still fill `size`.
+_TITLE_SLACK = 10
+
+_POP_SQL = "SELECT track_id, popularity FROM track_search WHERE track_id IN ({ph})"
+
+
+def _seeds(owned: list[int], limit: int) -> list[int]:
+    """Up to `limit` owned tracks, evenly spaced through the library. Deterministic."""
+    if len(owned) <= limit:
+        return owned
+    step = len(owned) / limit
+    return [owned[int(i * step)] for i in range(limit)]
+
+
 def recommend(index: VectorIndex, owned: list[int], size: int) -> list[dict[str, Any]]:
-    """Mean-pool the owned tracks' embeddings into a taste centroid, FAISS-search the catalog,
-    drop tracks the user already owns, dedupe catalog copies, hydrate the top `size`."""
-    embs = _embeddings(index, owned)
-    if embs.shape[0] == 0:
+    """Neighbours of the tracks you own, merged and re-ranked.
+
+    WHY NOT A CENTROID (it was one, and the centroid was the bug)
+      The old version mean-pooled every owned embedding into one vector and searched from
+      that. Averaging a diverse library produces a point that represents none of it —
+      measured on the five-track library above, the centroid sat at cosine 0.32 from
+      Teardrop and 0.47 from Tum Hi Ho. Its neighbourhood was correspondingly nowhere:
+      1,500 candidates of which 74% had popularity 0 and eight cleared 40, so the returned
+      "recommendations" were things like "Christ the Almighty vs. Diablo the Perverse".
+      No ranking weight fixes that, because what is being ranked never contained anything
+      worth surfacing — at W_POP 0.75 the median popularity of the top 10 still only reached
+      38, and the similarity term had been spent buying it.
+
+      Searching from each owned track instead asks the question the feature actually
+      promises: what sits next to the things you already have. Same pool size, more than
+      twice the recognisable candidates (18 at popularity >= 40 against 8).
+
+      The catch that comes with it: a track's nearest neighbours are its own catalogue
+      copies, so the first attempt handed back the user's own library. `owned` holds exact
+      track_ids, which does not cover the other 400 pressings of Blinding Lights — the
+      hydrate-time dedupe does, which is why every owned record is passed as `exclude`.
+    """
+    if not owned:
         return []
-    centroid = embs.mean(axis=0)
     owned_set = set(owned)
-    # Over-fetch: we discard owned hits and many catalog duplicates before keeping `size`.
-    k = max(CONFIG.faiss_topk, size * 4) + len(owned_set)
-    hits = [(tid, s) for tid, s in index.search(centroid, k) if tid not in owned_set]
-    if not hits:
+    pool: dict[int, float] = {}
+    for tid in _seeds(owned, _MAX_SEEDS):
+        vec = similar.get_embedding(index, tid)
+        if vec is None:
+            continue
+        # Retrieve INSIDE each seed's region/sonic family, exactly as F6 does. Without it a
+        # Bollywood library came back Japanese and Korean: the 13 audio features do not
+        # separate those, and no amount of re-ranking recovers what retrieval never returned.
+        # Falls through to an unfiltered search when the seed carries no family.
+        sel, _axis = similar.seed_selector(tid)
+        hits = index.search(vec, _PER_SEED_K, sel)
+        if sel is not None and len(hits) < _PER_SEED_K // 4:
+            hits = index.search(vec, _PER_SEED_K)   # family too thin around this seed
+        for t, s in hits:
+            if t not in owned_set and s > pool.get(t, -1.0):
+                pool[t] = s
+    if not pool:
         return []
-    score_by = {tid: s for tid, s in hits}
-    # hydrate_top stops as soon as `size` deduped records exist — for a real library the
-    # hit list is ~size*4 + owned (≈800 for 726 files), and hydrating all of it up front
-    # paid ~8× the needed 4-table joins.
-    records = hydrate.hydrate_top([tid for tid, _ in hits], size)
+
+    # One cheap numeric probe over the whole pool before anything is hydrated — the same
+    # two-tier discipline F6 follows, and the reason this costs ~6-8 ms rather than a join.
+    items = list(pool.items())
+    pops: dict[int, int] = {}
+    for chunk in _chunks([t for t, _ in items]):
+        for r in db.query(_POP_SQL.format(ph=db.placeholders(len(chunk))), chunk):
+            pops[r["track_id"]] = r["popularity"] or 0
+
+    # Percentile-clipped against the POOL's own range, never (cos+1)/2 against the theoretical
+    # [-1,1]: that map gave the similarity term a swing of ~0.003 and made any blend a
+    # popularity sort in disguise. See similar.normalize_sim.
+    sims = similar.normalize_sim(np.array([s for _, s in items], dtype=np.float64))
+    scored = sorted(
+        ((float(W_SIM * sim + W_POP * (pops.get(t, 0) / 100.0)), t)
+         for (t, _), sim in zip(items, sims)),
+        reverse=True,
+    )
+    score_by = {t: sc for sc, t in scored}
+
+    # hydrate_top stops as soon as `size` deduped records exist, and `exclude` pre-seeds that
+    # dedupe with the user's own records so no copy of anything they own comes back.
+    owned_recs = hydrate.hydrate(owned)
+    records = hydrate.hydrate_top([t for _, t in scored], size + _TITLE_SLACK,
+                                  exclude=owned_recs)
+
+    # Then a STRICTER pass than hydrate's, on title alone. hydrate._Seen needs the credits to
+    # overlap before it calls two records the same song, which is right for a result list and
+    # wrong here: "Tum He Ho" (a misspelling the fold cannot equate) and "Kal Ho Naa Ho"
+    # credited to the actor rather than the singer both came back as recommendations to
+    # someone who owns those songs. Recommending a track you already have is a worse failure
+    # than dropping a genuine namesake, so for F7 the title is enough.
+    owned_titles = {fold(str(r.get("title") or "")) for r in owned_recs}
+    records = [r for r in records
+               if fold(str(r.get("title") or "")) not in owned_titles][:size]
     for rec in records:
-        rec["score"] = round((score_by[rec["track_id"]] + 1.0) / 2.0, 4)  # cosine → [0,1]
+        rec["score"] = round(score_by[rec["track_id"]], 4)
     return records
 
 

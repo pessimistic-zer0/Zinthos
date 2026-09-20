@@ -55,7 +55,7 @@ class Config:
     # F6 re-rank: how a candidate's cosine is mapped onto the 0–1 scale the other four terms
     # already use. "clipped" scales against the POOL's own percentile range; "legacy" is the
     # old (cos+1)/2 map of the THEORETICAL [-1,1] range, kept only for A/B-ing by ear. See
-    # similar._normalize_sim for why legacy left the similarity term inert.
+    # similar.normalize_sim for why legacy left the similarity term inert.
     sim_norm: str = _env("SONIC_SIM_NORM", "clipped")     # "clipped" | "legacy"
     # Percentile trimmed off EACH end before scaling (clipped only). Duplicate catalog copies
     # arrive at cos≈1.0 and with a plain min/max would set the ruler's top for the whole pool.
