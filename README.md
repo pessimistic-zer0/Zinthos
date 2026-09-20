@@ -10,6 +10,14 @@ The whole pipeline — a 266 GB raw-data ETL, genre classification over 255M row
 
 ## Demo
 
+A public demo runs the same engine over a slice of the catalogue — the full `master.db` is
+162 GB and the FAISS index 9 GB, neither of which fits a free host. No code is forked: the
+slice keeps `master.db`'s track ids and every column the engine reads, and
+[`backend/engine/config.py`](backend/engine/config.py) is pointed at it by environment
+variable. See [`demo/`](demo/) for how it is built and deployed.
+
+The recordings below are from the full 255M-track index.
+
 Searching by feel — a vibe query (`dark moody instrumental electronic`) returns real tracks; `s` pulls nearest neighbours from the FAISS index ("more like this").
 
 ![Zinthos TUI — search & similar tracks](docs/demo.gif)
@@ -48,6 +56,8 @@ Scanning a local library — point it at a folder of audio files; it reads their
 | ML (genre, embeddings) | Python, LightGBM, PyTorch, FAISS | [`model_training/`](model_training/) |
 | Backend API | Python, FastAPI, uvicorn | [`backend/`](backend/) |
 | Terminal client | Rust, ratatui | [`tui/`](tui/) |
+| Web client | React, Vite, TypeScript | [`frontend/`](frontend/) |
+| Public demo | Slice builders + Hugging Face Space | [`demo/`](demo/) |
 | Dev environment | Nix devshell | [`flake.nix`](flake.nix) |
 
 ## Data
@@ -75,7 +85,7 @@ Evaluation artifacts from the genre classifier and the supervised autoencoder (f
 
 ## Running it
 
-> **Heads-up on portability:** the engine depends on a **162 GB `master.db`** and a **~9 GB FAISS index** built from ~266 GB of source data. These are **not** in this repo (see `.gitignore`) and can't realistically be shipped. The code, schema, and full pipeline are here and reproducible in principle, but a from-scratch build needs the source datasets and time. For a quick look, a short demo is the best starting point.
+> **Heads-up on portability:** the engine depends on a **162 GB `master.db`** and a **~9 GB FAISS index** built from ~266 GB of source data. These are **not** in this repo (see `.gitignore`) and can't realistically be shipped. The code, schema, and full pipeline are here and reproducible in principle, but a from-scratch build needs the source datasets and time. For a quick look, the demo above or the recordings are the best starting point.
 
 This is a NixOS project; all tooling comes from the devshell.
 

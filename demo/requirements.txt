@@ -1,0 +1,20 @@
+# Space runtime. Deliberately short: the engine imports nothing beyond these, and every
+# extra wheel is seconds added to a cold start on a Space that sleeps after 48 idle hours.
+#
+# `spaces` is here although nothing wants a GPU. A free account can only run a Gradio Space on
+# ZeroGPU hardware, and that runtime expects the package imported at startup — without it the
+# Space was killed ~45 s into every cold start, while the app was alive, bound and answering
+# 200 on every probe. No @spaces.GPU function is ever called, so no GPU is allocated and no
+# subprocess is forked.
+#
+# NOT here on purpose:
+#   torch / lightgbm — training and inference already happened. The Space reads their output
+#                   (10-D vectors, genre ids) out of the slice; it never runs a model.
+#   pandas        — gradio pulls it only for some components; the panel uses plain lists.
+spaces
+gradio>=5.0,<6
+fastapi>=0.115
+uvicorn>=0.30
+faiss-cpu>=1.8
+numpy>=1.26
+huggingface_hub>=0.25

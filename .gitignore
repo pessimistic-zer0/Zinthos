@@ -43,6 +43,11 @@ CLAUDE.md
 # === Internal-only docs (not for the public repo) ===
 PRD_Version2.md
 
+# === Demo build output (rebuildable; see demo/README.md) ===
+demo/dist/
+demo/static/
+frontend/dist-test/
+
 # === Notebook cruft ===
 *.ipynb_checkpoints
 *.virtual_documents
