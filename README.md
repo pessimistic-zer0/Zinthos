@@ -67,6 +67,13 @@ Scanning a local library — point it at a folder of audio files; it reads their
 
 ### Try it
 
+**▶ [ajenzer0-zinthos-portal.static.hf.space](https://ajenzer0-zinthos-portal.static.hf.space)** — live, no sign-up.
+
+The portal is a static Space, so it paints immediately. The engine behind it sleeps after
+48 idle hours and re-pulls its slice on wake, so the *first* query after a cold start can
+take a few minutes; the screen tells you what it is waiting for. Everything after that is
+the speed the recordings above show.
+
 A public demo runs the same engine over a **slice** of the catalogue — the full `master.db`
 is 162 GB and the FAISS index 9 GB, neither of which fits a free host. No code is forked: the
 slice keeps `master.db`'s track ids and every column the engine reads, and
