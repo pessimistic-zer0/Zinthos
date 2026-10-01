@@ -217,6 +217,9 @@
   flex-direction: column;
   gap: 18px;
   min-height: 0;
+  /* A grid item's automatic minimum is its min-content width, and a results row is one
+     unbroken line of title — so without this the column grew past the console's edge. */
+  min-width: 0;
 }
 
 .field {
@@ -307,6 +310,8 @@
   overflow-y: auto;
   margin-top: 6px;
   padding-right: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--hue) 60% 50% / 0.35) transparent;
 }
 .results__note {
   padding: 10px 2px;
@@ -321,33 +326,429 @@
   color: var(--violet-200);
 }
 
-.row {
+/* Loading: seven ghost rows breathing. Opacity only, one keyframe, staggered. */
+.skeleton {
+  display: grid;
+  gap: 10px;
+  padding: 8px 2px;
+}
+.skeleton span {
+  height: 52px;
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, hsl(var(--hue) 60% 60% / 0.14) 0 52px, transparent 52px 66px, rgba(255, 255, 255, 0.05) 66px 55%, transparent 55%);
+  animation: ghost 1.3s ease-in-out calc(var(--i) * 90ms) infinite alternate;
+}
+@keyframes ghost {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* The trail: every hop you have taken, walkable backwards. */
+.trail {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 0;
+  margin: 2px 0 8px;
+}
+.trail__step {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+  padding: 3px 6px;
+  border-radius: 5px;
+  transition: color 0.18s ease, background 0.18s ease;
+}
+.trail__step:not(:disabled):hover {
+  color: #fff;
+  background: hsl(var(--hue) 70% 55% / 0.18);
+}
+.trail__step + .trail__step::before {
+  content: '›';
+  margin: 0 8px 0 -2px;
+  color: hsl(var(--hue) 70% 60% / 0.6);
+}
+.trail__step.is-here {
+  color: hsl(var(--hue) 90% 78%);
+  cursor: default;
+}
+
+/* ── What she heard ───────────────────────────────────────────────────────── */
+.heard {
+  display: grid;
+  gap: 14px;
+  margin: 4px 0 14px;
+  padding: 14px 14px 16px;
+  border-radius: 10px;
+  background: hsl(var(--hue) 60% 40% / 0.07);
+  border: 1px solid hsl(var(--hue) 70% 60% / 0.16);
+}
+.heard__words {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+/* Solid: the rules placed it. Hollow: they could not — the ZIN / HOS split, again. */
+.heard__word {
+  padding: 3px 10px 4px;
+  border-radius: 999px;
+  font-family: var(--font-heading);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #0b0612;
+  background: hsl(var(--hue) 85% 72%);
+  border: 1px solid transparent;
+  animation: word-in 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.3) calc(var(--i) * 45ms) both;
+}
+.heard__word--hollow {
+  color: hsl(var(--hue) 80% 80%);
+  background: transparent;
+  border: 1px dashed hsl(var(--hue) 70% 70% / 0.55);
+}
+@keyframes word-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.9);
+  }
+}
+.heard__legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.heard__legend b {
+  margin-left: 10px;
+  font-weight: 500;
+  color: hsl(var(--hue) 80% 78%);
+}
+.heard__key {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: hsl(var(--hue) 85% 72%);
+}
+.heard__key--hollow {
+  background: none;
+  border: 1px dashed hsl(var(--hue) 70% 70% / 0.8);
+}
+
+.heard__rails {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px 26px;
+}
+.rail {
+  display: grid;
+  grid-template-columns: 96px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  animation: word-in 0.5s ease calc(120ms + var(--i) * 60ms) both;
+}
+.rail__label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.rail__track {
+  position: relative;
+  height: 6px;
+  margin-bottom: 11px;
+  border-radius: 3px;
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.09) 0 1px, transparent 1px 10%),
+    rgba(255, 255, 255, 0.05);
+}
+/* The stretch the filters left open. Placed with left/width once, grown with scaleX. */
+.rail__lit {
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  left: calc(var(--lo) * 100%);
+  width: max(3px, calc((var(--hi) - var(--lo)) * 100%));
+  border-radius: 3px;
+  background: linear-gradient(90deg, hsl(var(--hue) 90% 62%), hsl(var(--hue) 95% 80%));
+  box-shadow: 0 0 10px hsl(var(--hue) 90% 60% / 0.55);
+  transform-origin: 50% 50%;
+  animation: rail-grow 0.7s cubic-bezier(0.2, 0.9, 0.2, 1) calc(200ms + var(--i) * 60ms) both;
+}
+@keyframes rail-grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+.rail--empty .rail__lit {
+  background: #fb7185;
+  box-shadow: none;
+}
+.rail__end {
+  position: absolute;
+  top: 9px;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.08em;
+  color: rgba(152, 141, 159, 0.6);
+  white-space: nowrap;
+}
+.rail__end--lo {
+  left: 0;
+}
+.rail__end--hi {
+  right: 0;
+}
+.rail__value {
+  min-width: 64px;
+  margin-bottom: 11px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-align: right;
+  color: hsl(var(--hue) 80% 80%);
+}
+.rail--genre {
+  grid-template-columns: 96px 1fr;
+}
+.heard__genres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.heard__genres span {
+  padding: 2px 9px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #0b0612;
+  background: hsl(var(--hue) 80% 75%);
+}
+
+/* ── Play-all bar ─────────────────────────────────────────────────────────── */
+.results__bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 2px 0 6px;
+  padding: 0 2px 10px;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.07);
+}
+.results__play {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-family: var(--font-tech);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: hsl(var(--hue) 90% 85%);
+  border: 1px solid hsl(var(--hue) 80% 65% / 0.45);
+  background: hsl(var(--hue) 70% 50% / 0.12);
+  transition: background 0.2s ease, color 0.2s ease;
+}
+.results__play:hover {
+  background: hsl(var(--hue) 75% 55%);
+  color: #0b0612;
+}
+.results__skip {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.results__skip:hover {
+  color: #fff;
+}
+.results__count {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: rgba(152, 141, 159, 0.7);
+}
+.results__more {
+  display: block;
+  width: 100%;
+  margin: 14px 0 6px;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px dashed hsl(var(--hue) 70% 65% / 0.35);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: hsl(var(--hue) 85% 80%);
+  transition: background 0.2s ease;
+}
+.results__more:hover:not(:disabled) {
+  background: hsl(var(--hue) 70% 55% / 0.12);
+}
+
+/* ── A row ────────────────────────────────────────────────────────────────── */
+.row {
+  position: relative;
+  display: flex;
+  align-items: center;
   gap: 14px;
   width: 100%;
-  padding: 12px 10px;
+  padding: 9px 10px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  text-align: left;
-}
-.row--pick {
   border-radius: 8px;
+  text-align: left;
   transition: background 0.18s ease;
+  animation: row-in 0.42s cubic-bezier(0.2, 0.9, 0.3, 1) calc(var(--i, 0) * 28ms) both;
+}
+@keyframes row-in {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+}
+.row:hover,
+.row:focus-within {
+  background: hsl(var(--hue) 80% 60% / 0.08);
 }
 .row--pick:hover {
   background: hsl(var(--hue) 80% 60% / 0.14);
 }
+.row.is-current {
+  background: linear-gradient(90deg, hsl(var(--hue) 80% 55% / 0.2), hsl(var(--hue) 80% 55% / 0.04) 70%);
+}
 .row__prefix {
   flex: none;
+  width: 64px;
   font-family: var(--font-mono);
   font-size: 11px;
   color: hsl(var(--hue) 80% 68%);
-  padding-top: 2px;
 }
-.row__body {
+.row.is-current .row__prefix {
+  color: #fff;
+}
+
+.row__cover {
+  position: relative;
+  flex: none;
+  width: 46px;
+  height: 46px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #1b1228;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.row__cover img,
+.row__cover-blank {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.row__cover-blank {
+  background:
+    radial-gradient(circle at 50% 50%, #0b0612 0 18%, transparent 19%),
+    repeating-radial-gradient(circle at 50% 50%, #221733 0 2px, #170f24 2px 4px);
+}
+.row__glyph {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: rgba(8, 4, 16, 0.55);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+.row:hover .row__glyph,
+.row__cover:focus-visible .row__glyph,
+.row.is-current .row__glyph {
+  opacity: 1;
+}
+.row.is-silent .row__cover {
+  cursor: not-allowed;
+}
+.row.is-silent .row__cover img {
+  opacity: 0.55;
+}
+
+/* Three bars, each its own scaleY loop at its own period: an equaliser that never lines up. */
+.eq {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 14px;
+}
+.eq i {
+  width: 3px;
+  height: 100%;
+  border-radius: 1px;
+  background: hsl(var(--hue) 95% 78%);
+  transform-origin: bottom;
+  animation: eq 0.9s ease-in-out infinite alternate;
+}
+.eq i:nth-child(2) {
+  animation-duration: 0.62s;
+}
+.eq i:nth-child(3) {
+  animation-duration: 0.77s;
+  animation-delay: -0.3s;
+}
+@keyframes eq {
+  from {
+    transform: scaleY(0.2);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+.row__spin {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-top-color: #fff;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.row__main {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 3px;
   min-width: 0;
+  text-align: left;
+  border-radius: 6px;
+}
+.row__main:focus-visible {
+  outline: 1px solid hsl(var(--hue) 80% 70% / 0.6);
+  outline-offset: 4px;
+}
+.row__title,
+.row__desc,
+.row__meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .row__title {
   font-size: 14px;
@@ -364,6 +765,215 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: rgba(152, 141, 159, 0.75);
+}
+.row__meta em {
+  font-style: normal;
+  color: rgba(251, 113, 133, 0.6);
+}
+
+.row__actions {
+  flex: none;
+  display: flex;
+  gap: 4px;
+  opacity: 0.35;
+  transition: opacity 0.18s ease;
+}
+.row:hover .row__actions,
+.row:focus-within .row__actions,
+.row.is-current .row__actions {
+  opacity: 1;
+}
+.row__act {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  color: var(--text-muted);
+  border: 1px solid transparent;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+.row__act:hover {
+  color: #0b0612;
+  background: hsl(var(--hue) 80% 70%);
+}
+
+.row__progress {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 1px;
+  background: hsl(var(--hue) 95% 75%);
+  box-shadow: 0 0 8px hsl(var(--hue) 95% 65% / 0.8);
+  transform-origin: left;
+  transform: scaleX(0);
+}
+
+/* ── Library breakdown ────────────────────────────────────────────────────── */
+.shelf {
+  margin-bottom: 12px;
+}
+.shelf__grid {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 24px;
+  margin: 6px 0 4px;
+  padding: 14px;
+  border-radius: 10px;
+  background: hsl(var(--hue) 60% 40% / 0.07);
+  border: 1px solid hsl(var(--hue) 70% 60% / 0.16);
+}
+.shelf__head {
+  display: block;
+  margin-bottom: 10px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.shelf__bar {
+  display: grid;
+  grid-template-columns: 90px 1fr 28px;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 7px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.shelf__bar i {
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, hsl(var(--hue) 90% 62%), hsl(var(--hue) 95% 78%));
+  transform-origin: left;
+  transform: scaleX(var(--v));
+  animation: rail-grow 0.7s cubic-bezier(0.2, 0.9, 0.2, 1) calc(var(--i) * 60ms) backwards;
+}
+.shelf__bar b {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  text-align: right;
+  color: hsl(var(--hue) 80% 80%);
+}
+.shelf__eras {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 104px;
+}
+.shelf__era {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+}
+.shelf__era i {
+  width: 100%;
+  max-width: 26px;
+  height: 80px;
+  border-radius: 3px 3px 0 0;
+  background: linear-gradient(0deg, hsl(var(--hue) 80% 45%), hsl(var(--hue) 95% 75%));
+  transform-origin: bottom;
+  transform: scaleY(var(--v));
+  animation: era-grow 0.7s cubic-bezier(0.2, 0.9, 0.2, 1) calc(var(--i) * 60ms) backwards;
+}
+@keyframes era-grow {
+  from {
+    transform: scaleY(0);
+  }
+}
+.shelf__era em {
+  font-style: normal;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--text-faint);
+}
+.shelf__missed {
+  color: rgba(251, 113, 133, 0.7);
+}
+
+/* ── The persona, listening ───────────────────────────────────────────────── */
+/* A seam across her frame at the lean of the crack on the landing. At rest it is only a
+   hairline; the canvas opens it as the music plays. */
+.console__seam {
+  position: absolute;
+  left: -6%;
+  width: 112%;
+  top: 40%;
+  height: 36%;
+  transform: rotate(-9deg);
+  pointer-events: none;
+}
+.console__photo img {
+  transition: transform 1.2s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.6s ease;
+}
+.console.is-sounding .console__photo img {
+  transform: scale(1.05);
+  opacity: 0.82;
+}
+.console__now {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(10, 6, 18, 0.72), rgba(10, 6, 18, 0.92));
+  border: 1px solid hsl(var(--hue) 80% 65% / 0.3);
+  animation: word-in 0.45s ease both;
+}
+.console__now b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: #fff;
+}
+.console__now span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: hsl(var(--hue) 80% 80%);
+}
+.console__speech {
+  animation: word-in 0.4s ease both;
+}
+
+@media (max-width: 640px) {
+  .row__prefix {
+    display: none;
+  }
+  .heard__legend {
+    margin-left: 0;
+  }
+  .shelf__grid {
+    grid-template-columns: 1fr;
+  }
+  .results__count {
+    display: none;
+  }
+  /* Touch cannot hover, so the actions stay visible rather than hiding behind a state
+     the finger never produces. */
+  .row__actions {
+    opacity: 1;
+  }
+}
+@media (hover: none) {
+  .row__glyph {
+    opacity: 0.85;
+  }
 }
 
 /* ── Narrow: one column ────────────────────────────────────────────────────────
@@ -626,5 +1236,74 @@
 @media (max-height: 560px) and (min-width: 700px) and (max-width: 820px) {
   .console__speech {
     display: none;
+  }
+}
+
+/* Stacked, the photo is a 132px banner and the caption would be most of it. The playing
+   row is lit in the list already; the banner keeps just the seam. */
+@media (max-width: 900px) {
+  .console__now {
+    display: none;
+  }
+}
+
+/* ── Drift entry points ───────────────────────────────────────────────────── */
+/* The way into Drift, in the bar every result list has: filled, labelled, the one loud
+   control after Play. An unlabelled icon among three others read as nothing new. */
+.results__drift {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-family: var(--font-tech);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #0b0612;
+  background: hsl(var(--hue) 85% 72%);
+  box-shadow: 0 0 22px hsl(var(--hue) 90% 60% / 0.35);
+  transition: background 0.2s ease, transform 0.15s ease;
+}
+.results__drift:hover {
+  background: #fff;
+  transform: translateY(-1px);
+}
+/* On a row, the drift action is an icon at rest and grows its word on the row you are on
+   (hovered, focused, or playing) — so the one song you are hearing says "Drift" outright. */
+.row__act--drift {
+  width: auto;
+  min-width: 30px;
+  padding: 0 7px;
+  gap: 6px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.row__act-label {
+  display: none;
+  font-family: var(--font-tech);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.row:hover .row__act--drift,
+.row:focus-within .row__act--drift,
+.row.is-current .row__act--drift {
+  padding: 0 11px;
+  color: #0b0612;
+  background: hsl(var(--hue) 85% 72%);
+}
+.row:hover .row__act-label,
+.row:focus-within .row__act-label,
+.row.is-current .row__act-label {
+  display: inline;
+}
+@media (max-width: 640px) {
+  .results__bar {
+    flex-wrap: wrap;
   }
 }

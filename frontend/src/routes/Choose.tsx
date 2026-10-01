@@ -1,9 +1,14 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { WarpOrigin } from '../App'
 import { MODES, modeById, type Mode, type ModeKind } from '../lib/modes'
 import QueryModal from '../components/QueryModal'
 import ConstellationCanvas from '../components/ConstellationCanvas'
 import ChooseBackdrop from '../components/ChooseBackdrop'
+import NowPlaying from '../components/NowPlaying'
+import { player, usePlayer } from '../lib/player'
+import { api, type TrackRecord } from '../lib/api'
+import { scene } from '../lib/scene'
+import Drift from './Drift'
 import '../styles/choose.css'
 import { formatCount, isDemo, onIndexSize } from '../lib/demo'
 
@@ -26,6 +31,93 @@ export default function Choose({ holding, closing, origin, onBack }: Props) {
   const [sliceSize, setSliceSize] = useState<number | null>(null)
 
   useEffect(() => onIndexSize(setSliceSize), [])
+  // The music belongs to this side of the rift. Going back through it stops the queue.
+  useEffect(() => () => player.stop(), [])
+  /** The hue of the last door opened, which the now-playing pill keeps after it closes. */
+  const [lastHue, setLastHue] = useState<number>(MODES[0]?.hue ?? 278)
+
+  /**
+   * Drift: the seed, where it was chosen on screen (its paint pours from there), and whether
+   * it is folded away into the rift. Held here rather than in App so the console underneath
+   * keeps its search, its trail and its scroll. `n` keys the Drift component, so drifting
+   * from another song starts a fresh radio.
+   *
+   * Minimized, Drift is still mounted and still the radio — it keeps choosing and mixing —
+   * only its screen is gone. It ends when the music is stopped.
+   */
+  const [drift, setDrift] = useState<{ seed: TrackRecord; from: DOMRect | null; n: number; min: boolean } | null>(null)
+  const now = usePlayer()
+  /** Whether the #/drift history entry is ours to go back from (not a pasted link). */
+  const pushed = useRef(false)
+
+  const showDrift = useCallback((id: number) => {
+    if (!window.location.hash.startsWith('#/drift/')) {
+      window.history.pushState(null, '', `#/drift/${id}`)
+      pushed.current = true
+    }
+  }, [])
+
+  /**
+   * Play means Drift. A song already on air in a folded Drift unfolds it (and resumes it if
+   * paused); any other song starts a new radio from it.
+   */
+  const openDrift = useCallback(
+    (seed: TrackRecord, from: DOMRect | null) => {
+      const onAir = player.state.track?.track_id === seed.track_id
+      setDrift((d) => {
+        if (d && onAir) return { ...d, min: false }
+        return { seed, from, n: (d?.n ?? 0) + 1, min: false }
+      })
+      if (onAir && !player.state.playing) player.toggle()
+      showDrift(seed.track_id)
+    },
+    [showDrift],
+  )
+
+  const minimizeDrift = useCallback(() => {
+    // Leave the way we came in, so the back button does not have a dead step to walk through.
+    if (pushed.current && window.location.hash.startsWith('#/drift/')) {
+      pushed.current = false
+      window.history.back()
+    } else {
+      window.history.replaceState(null, '', '#/choose')
+      setDrift((d) => (d ? { ...d, min: true } : d))
+    }
+  }, [])
+
+  useEffect(() => {
+    const onHash = () => {
+      const inDrift = window.location.hash.startsWith('#/drift/')
+      // Back folds Drift away; forward unfolds it. Neither ends it.
+      setDrift((d) => (d && d.min === inDrift ? { ...d, min: !inDrift } : d))
+    }
+    window.addEventListener('hashchange', onHash)
+    // A pasted #/drift/{id}: fetch the seed and open on it, with no row to pour from.
+    const m = window.location.hash.match(/^#\/drift\/(\d+)/)
+    if (m) {
+      api
+        .track(Number(m[1]))
+        .then((t) => (t.preview_url ? openDrift(t, null) : window.history.replaceState(null, '', '#/choose')))
+        .catch(() => window.history.replaceState(null, '', '#/choose'))
+    }
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [openDrift])
+
+  // Stopping the music ends Drift — the pill's stop is the way out of the radio.
+  useEffect(() => {
+    if (!now.track && drift?.min) setDrift(null)
+  }, [now.track, drift?.min])
+
+  const drifting = !!drift && !drift.min
+  /** Drift is fully open over the matrix (never mid-fold): only then does the matrix go dark. */
+  const [covered, setCovered] = useState(false)
+  // Nothing of the matrix shows while Drift covers it: its starfield stops drawing.
+  useEffect(() => {
+    scene.covered = covered
+    return () => {
+      scene.covered = false
+    }
+  }, [covered])
   // Captured once: whether this mount arrived through the warp. `holding` flips to false
   // on arrival, but the approach animation must stay on the element — and must NOT run at
   // all for someone who opened #/choose directly, who would otherwise get a slow zoom
@@ -61,12 +153,14 @@ export default function Choose({ holding, closing, origin, onBack }: Props) {
       tilt,
     })
     setSelected(id)
+    setLastHue(modeById(id).hue)
     setOpen(true)
   }, [])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return
+      // Drift is on top and handles its own Esc.
+      if (e.key !== 'Escape' || drifting) return
       // Esc closes the console first, and only backs out to the landing page once there is
       // nothing left to close.
       if (open) close()
@@ -74,14 +168,15 @@ export default function Choose({ holding, closing, origin, onBack }: Props) {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [open, close, onBack])
+  }, [open, close, onBack, drifting])
 
   const active: Mode | null = selected ? modeById(selected) : null
 
   return (
+    <>
     <div
       ref={setHost}
-      className={`choose${viaWarp ? ' is-warp-arrival' : ''}${holding ? ' is-holding' : ''}${closing ? ' is-closing' : ''}`}
+      className={`choose${viaWarp ? ' is-warp-arrival' : ''}${holding ? ' is-holding' : ''}${closing ? ' is-closing' : ''}${covered ? ' is-drifting' : ''}`}
       style={
         origin
           ? ({ '--warp-x': `${origin.x}px`, '--warp-y': `${origin.y}px` } as React.CSSProperties)
@@ -177,7 +272,11 @@ export default function Choose({ holding, closing, origin, onBack }: Props) {
         </div>
       </footer>
 
-      {active && open && <QueryModal mode={active} from={from} onClose={close} />}
+      {!open && <NowPlaying hue={lastHue} onDrift={openDrift} />}
+
+      {active && open && <QueryModal mode={active} from={from} onClose={close} onDrift={openDrift} drifting={!!drift} />}
     </div>
+    {drift && <Drift key={drift.n} seed={drift.seed} from={drift.from} minimized={drift.min} onMinimize={minimizeDrift} onCover={setCovered} />}
+    </>
   )
 }

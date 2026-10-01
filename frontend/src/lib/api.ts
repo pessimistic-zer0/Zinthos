@@ -142,6 +142,9 @@ const qs = (params: Record<string, string | number>): string =>
 export const api = {
   health: (): Promise<HealthResponse> => call<HealthResponse>('/health'),
 
+  /** One track by id — how a pasted #/drift/{id} link finds its seed. */
+  track: (id: number): Promise<TrackRecord> => call<TrackRecord>(`/track/${id}`),
+
   /** Mode 01 — natural-language vibe search. */
   search: (q: string, limit = 30, offset = 0): Promise<SearchResponse> =>
     call<SearchResponse>(`/search?${qs({ q, limit, offset })}`),

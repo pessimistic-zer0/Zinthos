@@ -1,0 +1,539 @@
+/* ── Drift, on the portal's night ─────────────────────────────────────────────
+   The standalone Drift is ink on paper. Here the paint is on --bg, the text is the
+   portal's, and the one loud colour is the playing cover's own, lifted to read on dark
+   (--drift-acc, set per song by the radio; registered so it can transition). Motion is
+   transform and opacity only — the repo's performance rules — so the title swap that
+   blurs in the paper version fades and rises here instead. */
+
+@property --drift-acc {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: hsl(270 80% 75%);
+}
+
+.drift {
+  position: fixed;
+  inset: 0;
+  /* Above the console's scrim (80); the demo notice (60) stays under, as it does there. */
+  z-index: 85;
+  background: var(--bg);
+  color: var(--text);
+  transition: --drift-acc 2.2s ease;
+  animation: drift-in 0.35s ease both;
+}
+@keyframes drift-in {
+  from {
+    opacity: 0;
+  }
+}
+.drift__paint {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.drift__wires {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.drift__wires path {
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 1;
+  stroke-dasharray: 2 5;
+  opacity: 0.35;
+}
+.drift__wires path.is-auto {
+  stroke: var(--drift-acc);
+  stroke-width: 1.6;
+  stroke-dasharray: none;
+  opacity: 0.9;
+}
+
+/* ── Top ────────────────────────────────────────────────────────────────── */
+.drift__top {
+  position: absolute;
+  top: 22px;
+  left: 43px;
+  right: 43px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  pointer-events: none;
+}
+.drift__top > * {
+  pointer-events: auto;
+}
+.drift__mark {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 600;
+  font-size: 34px;
+  letter-spacing: -0.01em;
+}
+.drift__mark i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--drift-acc);
+}
+
+/* ── The caption beside the painting ───────────────────────────────────── */
+.drift__now {
+  position: absolute;
+  left: 43px;
+  top: 50%;
+  width: min(360px, calc(50vw - 20vw - 83px));
+  transform: translateY(-50%);
+  text-shadow: 0 2px 18px rgba(7, 4, 15, 0.9);
+}
+.drift__kicker {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.drift__state {
+  color: var(--drift-acc);
+}
+.drift__title {
+  margin-top: 14px;
+  /* Bodoni only at display sizes: below ~50px its hairlines break up (global.css). */
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: clamp(50px, 4.6vw, 72px);
+  line-height: 0.95;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  animation: drift-rise 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.drift__artist {
+  margin-top: 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  animation: drift-rise 0.7s 0.06s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes drift-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+.drift__bar {
+  position: relative;
+  height: 1.5px;
+  margin-top: 26px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+.drift__bar i {
+  position: absolute;
+  inset: 0;
+  background: var(--drift-acc);
+  transform-origin: left;
+  transform: scaleX(0);
+}
+.drift__time {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.drift__why {
+  color: var(--drift-acc);
+  text-align: right;
+}
+.drift__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 24px;
+}
+.drift__btn {
+  padding: 9px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  font-family: var(--font-tech);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text);
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+.drift__btn:hover {
+  border-color: var(--text);
+}
+.drift__btn--go {
+  background: var(--drift-acc);
+  border-color: transparent;
+  color: #0b0612;
+}
+.drift__btn--go:hover {
+  border-color: transparent;
+  background: #fff;
+}
+.drift__btn:disabled {
+  opacity: 0.4;
+  cursor: progress;
+}
+
+/* ── The ways on ────────────────────────────────────────────────────────── */
+/* Scattered (wide screens): a click-through layer the size of the screen, each way placed
+   by its own transform from Drift.tsx. The entrance animates the way's children, not the
+   way, or the keyframe would fight the placement. */
+.drift__ways.is-scatter {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.drift-way {
+  display: grid;
+  grid-template-columns: 58px 1fr;
+  align-items: center;
+  gap: 14px;
+  text-align: left;
+}
+.drift__ways.is-scatter .drift-way {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 260px;
+  pointer-events: auto;
+}
+.drift-way > * {
+  animation: drift-pop 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.25) both;
+  animation-delay: calc(0.2s + var(--i) * 110ms);
+}
+@keyframes drift-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+}
+.drift-way__disc {
+  position: relative;
+  width: 58px;
+  height: 58px;
+}
+.drift-way__disc img,
+.drift-way__blank {
+  position: absolute;
+  inset: 5px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--surface-raised);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55);
+  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.drift-way:hover .drift-way__disc img {
+  transform: scale(1.08);
+}
+.drift-way__disc svg {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+}
+.drift-way__disc circle {
+  fill: none;
+  stroke-width: 1.5;
+}
+.drift-way__disc .track {
+  stroke: rgba(255, 255, 255, 0.18);
+}
+.drift-way__disc .fill {
+  stroke: var(--drift-acc);
+  stroke-dasharray: 169.6;
+  stroke-dashoffset: 169.6;
+  stroke-linecap: round;
+}
+.drift-way__key {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 1px solid var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+}
+.drift-way.is-auto .drift-way__key {
+  background: var(--drift-acc);
+  border-color: transparent;
+  color: #0b0612;
+}
+.drift-way__text {
+  min-width: 0;
+  /* Paint runs under the labels; a halo of night keeps them legible over it. */
+  text-shadow:
+    0 0 6px var(--bg),
+    0 0 3px var(--bg),
+    0 0 1px var(--bg);
+}
+.drift-way__text em {
+  display: block;
+  font-style: normal;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.drift-way.is-auto .drift-way__text em {
+  color: var(--drift-acc);
+}
+.drift-way__text strong {
+  display: block;
+  margin-top: 3px;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 17px;
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.drift-way__text span {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.drift__wait {
+  position: absolute;
+  left: calc(50vw + 20vw + 48px);
+  top: 46%;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+/* The disc that was chosen, left behind and draining as its paint pours out. */
+.drift-ghost {
+  position: fixed;
+  z-index: 86;
+  padding: 5px;
+  border-radius: 50%;
+  overflow: hidden;
+  pointer-events: none;
+  animation: drift-drain 0.9s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+.drift-ghost img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+@keyframes drift-drain {
+  18% {
+    transform: scale(1.14);
+  }
+  100% {
+    transform: scale(0.1) rotate(-50deg);
+    opacity: 0;
+  }
+}
+
+/* ── The path so far ────────────────────────────────────────────────────── */
+.drift__path {
+  position: absolute;
+  left: 43px;
+  right: 43px;
+  bottom: 22px;
+  display: flex;
+  align-items: center;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 6px 0;
+}
+.drift-hop {
+  flex: none;
+  display: flex;
+  align-items: center;
+}
+.drift-hop__gap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 44px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-faint);
+}
+.drift-hop__gap::before {
+  content: '';
+  width: 100%;
+  height: 1px;
+  margin-bottom: 3px;
+  background: var(--text-faint);
+  opacity: 0.5;
+}
+.drift-hop button {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--surface-raised);
+  opacity: 0.55;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.drift-hop button:hover {
+  opacity: 1;
+  transform: translateY(-2px);
+}
+.drift-hop.is-now button {
+  opacity: 1;
+  outline: 1.5px solid var(--drift-acc);
+  outline-offset: 2px;
+}
+.drift-hop img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.drift__keys {
+  position: absolute;
+  right: 43px;
+  bottom: 70px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+.drift__keys kbd {
+  margin: 0 4px 0 12px;
+  padding: 1px 5px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+}
+
+/* ── Narrow: painting on top, the ways in a row under it, the caption below ── */
+@media (max-width: 860px) {
+  .drift__top {
+    left: 16px;
+    right: 16px;
+    top: 14px;
+  }
+  .drift__mark {
+    font-size: 26px;
+  }
+  .drift__now {
+    top: auto;
+    bottom: 76px;
+    left: 16px;
+    right: 16px;
+    width: auto;
+    transform: none;
+  }
+  .drift__title {
+    font-family: var(--font-heading);
+    font-size: 30px;
+    font-weight: 700;
+    -webkit-line-clamp: 2;
+  }
+  .drift__bar {
+    margin-top: 14px;
+  }
+  .drift__actions {
+    margin-top: 14px;
+  }
+  .drift__ways {
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    top: calc(27vh + 20vh + 14px);
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+  }
+  .drift-way {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    text-align: center;
+    gap: 4px;
+  }
+  .drift-way__text strong {
+    font-size: 13px;
+    max-width: 21vw;
+  }
+  .drift-way__text span {
+    display: none;
+  }
+  .drift__wait {
+    position: static;
+    grid-column: 1 / -1;
+    text-align: center;
+  }
+  .drift__path {
+    left: 16px;
+    right: 16px;
+    bottom: 14px;
+  }
+  .drift__keys {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drift,
+  .drift__title,
+  .drift__artist,
+  .drift-way > *,
+  .drift-ghost {
+    animation: none;
+  }
+}
+
+/* ── Folding into the rift ─────────────────────────────────────────────────
+   The fold itself is lib/drift/fold.ts: one clock writes this element's transform and draws
+   the light on the canvas below. Here: what each stage allows, and that canvas. */
+.drift.is-collapsing,
+.drift.is-expanding {
+  pointer-events: none;
+}
+.drift.is-min {
+  visibility: hidden;
+  pointer-events: none;
+}
+/* Above Drift (85) and its drained discs (86): the rims, the debris and the impact. */
+.drift-fold-fx {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 87;
+  pointer-events: none;
+}

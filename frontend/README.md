@@ -30,7 +30,7 @@ Other scripts: `npm run build`, `npm run preview`, `npm run typecheck`.
 ```
 index.html
 src/
-  App.tsx                 phase machine: landing → warp → choose, plus #/choose hash routing
+  App.tsx                 phase machine: landing → warp → choose, plus #/choose and #/drift/{id}
   routes/Landing.tsx      the portal; clicking Raven opens the rift she is guarding
   routes/Choose.tsx       the 4-corner decision matrix
   components/
@@ -43,9 +43,19 @@ src/
     RiftReveal            the crack opening — clip polygon + edge light, one clock for both
     QueryModal            per-mode query console + results; 80vw x 80vh, swoops in from the
                           card that was clicked (Choose passes the card's centre as --from-*)
-                          persona column lists the mode's `abilities` from lib/modes.ts
+                          persona column lists the mode's `abilities` from lib/modes.ts;
+                          results are a stack of views (search → neighbours → …) with a trail
+    TrackRow              one result: cover, preview, neighbours, a link out to the full track
+    SoundProfile          "what she heard": parsed words solid/hollow, filters as lit rails
+    RiftSpectrum          the live spectrum drawn as the crack — opens with the music
+    NowPlaying            the pill that keeps the queue once the console has closed
+  routes/Drift.tsx        Drift, the listening mode — any track becomes an endless radio
   lib/
     api.ts                typed Engine client (shapes mirror engine/hydrate.py)
+    player.ts             two decks, a crossfader, one analyser, and the queue
+    drift/                Drift's engine: radio (the controller), field (the paint),
+                          painter (WebGL2), source (a cover as 112×112 sorted homes)
+    profile.ts            filter triples → one [lo, hi] interval per feature
     modes.ts              the 4 modes — art, voice, and which endpoint each one runs
     useRavenEvasion.ts    Raven drifts away from the pointer
     rift.ts               the crack's geometry, opening curve and clip string
@@ -228,3 +238,89 @@ phone in landscape is wider than some laptops, and a touchscreen laptop is neith
 
 Modes are data (`src/lib/modes.ts`); a fifth means an entry there plus a branch in
 `QueryModal`.
+
+## The console, listening
+
+The engine has always returned more than the console drew. Every record carries
+`cover_art_url` and `preview_url` (Spotify's 30-second clips), a search carries what its parser
+made of the words (`matched`, `unmatched`, `coverage`, `source`) and the predicates it ran
+(`filters`), and a library scan carries a genre and decade `breakdown`. The console used to
+render titles and nothing else. Now:
+
+- **Every row plays.** `lib/player.ts` owns one `<audio>` routed through a Web Audio analyser,
+  and a queue: click a row and the list plays on from there, skipping tracks the catalogue has
+  no preview for. "Play the sequence" in mode 03 is the playlist as ordered. Closing the
+  console does not stop it — `NowPlaying` carries it on the matrix — but leaving through the
+  rift does.
+- **The analyser works only because of one header.** p.scdn.co answers with
+  `Access-Control-Allow-Origin: *`, and `crossOrigin = 'anonymous'` is set on the element
+  before its first `src`. Without both, a MediaElementSource outputs silence rather than leak
+  cross-origin samples: the music would play and every spectrum would stay flat.
+- **The rift listens.** `RiftSpectrum` is the spectrum drawn as the crack: a hairline seam at
+  silence, lips parting band by band (log-spaced, low on the left, pinned shut at both ends)
+  as the music plays. It crosses her photo in the console and sits in the pill. On the
+  matrix, the tear's rim breathes with the low end — `TearPulse`, a second copy of the rim on
+  its own layer whose opacity alone changes, so the compositor fades a raster it already has.
+- **What she heard.** Above the results, the query as the engine took it: words the rules
+  placed are solid, words they could not are hollow (the ZIN/HOS split) — handed to the LLM
+  or dropped, as `source` says. Each feature's filters collapse to the interval they leave
+  open and are drawn as a lit stretch of a rail: `valence < 350` is "Mood: dark ← .35".
+- **Wander.** Any result opens its own neighbourhood (`/search/similar/{id}`), pushed on top of
+  the current view; the trail above the list walks back. Mode 02's "pick a copy" is the same
+  move, replacing its picker rather than leaving it in the trail. Vibe search also pages:
+  "Dig deeper" asks for the next 30 at the next offset.
+- **Thumbnails at 2 kB.** Spotify serves every cover at 64, 300 and 640 px under one path
+  segment; `coverAt()` swaps it, so a list of 30 costs ~60 kB of art rather than ~3 MB.
+
+Per-frame values — the spectrum, the progress hairline, the rim's opacity — are read from
+`player` inside each canvas's or element's own rAF and written straight to the DOM. Only the
+coarse state (which track, playing or not) goes through React, via `useSyncExternalStore`.
+
+## Drift: the listening mode
+
+Every door ends in a track, and **pressing play is Drift**: a row, its cover, or the results
+bar's Play opens it, the song's paint pouring out of the row it was pressed in. From then on
+the radio never stops — each song is followed by one of its own neighbours in the embedding,
+four offered beside the painting. It is `#/drift/{track_id}`; a pasted link opens straight
+into it (the seed comes from `GET /track/{id}`).
+
+**Back to the list folds Drift into the rift** (so do Esc and the back button). The radio
+keeps playing and choosing; only the screen goes — pulled into the listening seam on
+Raven's photo in the console, or the pill's seam when the console is closed.
+`lib/drift/fold.ts` runs it on one clock that writes Drift's transform and draws the light on
+a canvas above it: the screen **recoils**, is **crushed** to a band whose edges light as rift
+rims while the room darkens and debris streaks at the crack, holds as a **trembling line**,
+and **snaps** in — flash, twin shockwave rings, the console jolts, the seam tears wide and
+bounces shut. The music goes under a lowpass as it is pulled in (over a rising whoosh) and
+opens back up on the sub thud of the landing (`fx` in `lib/player.ts`; the filter sits after
+the analyser, so the spectra keep showing the music). **Back to Drift** in the results bar,
+the pill's *drift*, or play on the song on air tears it back out the same way in reverse.
+While folded, *next* is Drift's next song and *stop* ends it. The matrix only goes dark once
+Drift reports it fully covers the screen — mid-fold, the console must still be there around
+the band. `window.__foldSlow = 10` (dev builds only) plays the fold at a tenth of the speed.
+
+The same thing exists standalone, on paper, in `../frontend-drift/`, and that README
+explains the mechanics: the sorted-luminance morph, the three forces, paint that dries,
+and why the auto-drift leans "nearby" and avoids repeating an artist. What changed on the
+way in:
+
+- **One audio graph.** Drift does not bring its own decks. `lib/player.ts` became two decks
+  behind the same API (`play`, `toggle`, `spectrum`, `level`, `progress`), plus `mix(track,
+  fade)` for Drift and an `onNearEnd` hook that fires 3.2 s before a clip ends. The console,
+  the rift spectrum, the tear pulse and the pill kept working unchanged, and they now get
+  real crossfades. Only the live deck's events count. The outgoing deck pauses after its
+  fade and eventually ends, and either event, taken at face value, would report the new
+  song as paused or push the queue on. While Drift is steering, the queue does not advance
+  on its own: the end of a song is Drift's to handle.
+- **Night, not paper.** The painter takes its ground as an option; here it is `--bg`, and
+  the wash dries paint back to it. The paper version's accent (tuned for ink, lightness
+  36–50%) is lifted to 72% lightness so it reads on dark.
+- **The repo's performance rules.** The title swap that blurs in the paper version fades and
+  rises here: transform and opacity only. While Drift covers the matrix, the matrix is
+  `visibility: hidden` (after Drift's 0.35 s fade) and its starfield skips drawing through the
+  shared `scene.covered` flag, so nothing composites under an opaque screen.
+- **It pours from where you chose it.** The first picture pours out of the console row's
+  cover (or the pill's disc); every switch after that pours out of the chosen way's disc.
+- **It lives in the matrix, not in App.** `Choose` holds the Drift state, so the console
+  underneath keeps its search, its trail and its scroll. Folded, Drift stays mounted — it is
+  still the radio — and its painting stops drawing until it is torn back out.

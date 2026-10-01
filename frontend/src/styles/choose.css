@@ -695,3 +695,22 @@
     transform: translateY(-40px) scale(1.25);
   }
 }
+
+/* The rim again, on its own layer, lit by the bass while a preview plays (TearPulse in
+   ChooseBackdrop drives the opacity). Starts dark; nothing here animates at rest. */
+.choose__pulse {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  pointer-events: none;
+  opacity: 0;
+}
+
+/* Drift is over the matrix. Once it has faded in, the matrix stops painting altogether —
+   collage drift, cards, console — rather than being composited under an opaque screen.
+   Delayed by Drift's own fade, so the matrix is still there to be faded over. Coming back,
+   it is visible again at once (no delay in that direction). */
+.choose.is-drifting {
+  visibility: hidden;
+  transition: visibility 0s linear 0.4s;
+}

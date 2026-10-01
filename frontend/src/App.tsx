@@ -29,8 +29,9 @@ export interface WarpOrigin extends RiftGeometry {
   figure: FigureSnapshot | null
 }
 
+/** #/drift/{id} is the matrix with Drift open over it (routes/Choose.tsx owns that part). */
 const phaseFromHash = (): Phase =>
-  window.location.hash === '#/choose' ? 'choose' : 'landing'
+  window.location.hash === '#/choose' || window.location.hash.startsWith('#/drift/') ? 'choose' : 'landing'
 
 export default function App() {
   const [phase, setPhase] = useState<Phase>(phaseFromHash)

@@ -1,0 +1,163 @@
+/* The pill that carries the music once the console has closed. Bottom centre, above the
+   cards and the footer hints, below the console's scrim (which is z-index 80). */
+.np {
+  position: fixed;
+  left: 50%;
+  bottom: 22px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: min(560px, calc(100vw - 32px));
+  padding: 8px 10px 8px 8px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(27, 18, 40, 0.96), rgba(12, 8, 20, 0.96));
+  border: 1px solid hsl(var(--hue) 80% 65% / 0.35);
+  box-shadow:
+    0 18px 50px rgba(0, 0, 0, 0.6),
+    0 0 40px hsl(var(--hue) 85% 55% / 0.14);
+  transform: translateX(-50%);
+  animation: np-in 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+@keyframes np-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 30px) scale(0.94);
+  }
+}
+
+/* The cover as a record: round, a spindle hole, and it turns while the music does. */
+.np__disc {
+  position: relative;
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: repeating-radial-gradient(circle, #221733 0 2px, #170f24 2px 4px);
+  animation: np-spin 3.2s linear infinite paused;
+}
+.np__disc[data-spin] {
+  animation-play-state: running;
+}
+.np__disc img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.np__disc::after {
+  content: '';
+  position: absolute;
+  inset: 42%;
+  border-radius: 50%;
+  background: #0c0814;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.18);
+}
+@keyframes np-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.np__text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 0 1 180px;
+}
+.np__text b,
+.np__text span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.np__text b {
+  font-size: 13px;
+  color: #fff;
+}
+.np__text span {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: hsl(var(--hue) 80% 80%);
+}
+
+.np__seam {
+  flex: 1;
+  min-width: 60px;
+  height: 34px;
+}
+
+.np__controls {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.np__controls button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  color: var(--text-muted);
+  transition: background 0.18s ease, color 0.18s ease;
+}
+.np__controls button:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+.np__controls .np__main {
+  width: 36px;
+  height: 36px;
+  color: #0b0612;
+  background: hsl(var(--hue) 80% 70%);
+}
+.np__controls .np__main:hover {
+  color: #0b0612;
+  background: hsl(var(--hue) 90% 78%);
+}
+
+@media (max-width: 640px) {
+  /* The demo notice docks to the bottom edge at this width; sit above it. */
+  .np {
+    bottom: calc(16px + env(safe-area-inset-bottom));
+  }
+  body:has(.demo-notice) .np {
+    bottom: 76px;
+  }
+  .np__seam {
+    display: none;
+  }
+  .np__text {
+    flex: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .np,
+  .np__disc {
+    animation: none;
+  }
+}
+
+/* Drift from what is playing: a word, not an icon — it is the one control here that
+   opens somewhere new rather than acting on the song. */
+.np__controls .np__drift {
+  width: auto;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--hue) 80% 70% / 0.5);
+  font-family: var(--font-tech);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: hsl(var(--hue) 90% 82%);
+}
+.np__controls .np__drift:hover {
+  background: hsl(var(--hue) 80% 70%);
+  color: #0b0612;
+}

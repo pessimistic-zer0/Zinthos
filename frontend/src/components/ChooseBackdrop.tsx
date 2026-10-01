@@ -1,4 +1,5 @@
-import { useLayoutEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { player, usePlayer } from '../lib/player'
 import type { WarpOrigin } from '../App'
 import { MODES } from '../lib/modes'
 import { polygonToClip, reachOf, riftPolygon } from '../lib/rift'
@@ -24,6 +25,43 @@ interface Props {
   origin: WarpOrigin | null
   /** The screen's element itself, not a ref to it — see the note in routes/Choose.tsx. */
   host: HTMLDivElement | null
+}
+
+/**
+ * The tear's rim, breathing with the bass while something plays.
+ *
+ * Its own layer, and only opacity changes on it — so the compositor fades a raster it
+ * already has instead of the SVG above being repainted every frame. `will-change` is set
+ * only while the loop runs, per the repo's rule of no layer hints at rest.
+ */
+function TearPulse({ w, h, d }: { w: number; h: number; d: string }) {
+  const el = useRef<SVGSVGElement>(null)
+  const { playing } = usePlayer()
+  useEffect(() => {
+    const svg = el.current
+    if (!svg || !playing) return
+    let raf = 0
+    let v = 0
+    svg.style.willChange = 'opacity'
+    const tick = () => {
+      const target = Math.min(1, player.level() * 1.4)
+      v += (target - v) * (target > v ? 0.5 : 0.08)
+      svg.style.opacity = v.toFixed(3)
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => {
+      cancelAnimationFrame(raf)
+      svg.style.opacity = '0'
+      svg.style.willChange = ''
+    }
+  }, [playing])
+  return (
+    <svg ref={el} className="choose__pulse" viewBox={`0 0 ${w} ${h}`} width={w} height={h} aria-hidden="true">
+      <path d={d} fill="none" stroke="rgba(192, 132, 252, 0.22)" strokeWidth="34" />
+      <path d={d} fill="none" stroke="rgba(233, 213, 255, 0.7)" strokeWidth="2" />
+    </svg>
+  )
 }
 
 /** Where the segment from `from` toward `to` first meets the rectangle around `to`. */
@@ -110,6 +148,8 @@ export default function ChooseBackdrop({ origin, host }: Props) {
   const tearPath = `M${tear.split(', ').join('L')}Z`
 
   return (
+    <>
+    <TearPulse w={w} h={h} d={tearPath} />
     <svg className="choose__backdrop" viewBox={`0 0 ${w} ${h}`} width={w} height={h} aria-hidden="true">
       {/* Past the rim it is a shade darker: the wall, seen from inside the hole. */}
       <path d={`M0 0H${w}V${h}H0Z ${tearPath}`} fill="rgba(0, 0, 0, 0.3)" fillRule="evenodd" />
@@ -124,5 +164,6 @@ export default function ChooseBackdrop({ origin, host }: Props) {
         </g>
       ))}
     </svg>
+    </>
   )
 }
